@@ -560,6 +560,18 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
+
+        <div class="glass-card setting-item" id="firebase-url-row" style="display:none;">
+  <div class="setting-info" style="width:100%;">
+    <h4>Firebase Database URL</h4>
+    <p style="font-size:0.75rem;color:#6b7280;">Paste your Realtime Database URL here</p>
+    <input type="url" id="firebase-url-input" class="cal-input" style="width:100%;margin-top:6px;font-size:0.8rem;" placeholder="https://your-project.firebaseio.com/">
+    <button class="btn-secondary" id="btn-connect-firebase" onclick="app.connectFirebase()" style="margin-top:8px;width:100%;">
+      Connect to Firebase
+    </button>
+    <div id="firebase-status" style="font-size:0.7rem;color:#6b7280;margin-top:4px;">Not connected</div>
+  </div>
+</div>
         <div class="glass-card setting-item">
           <div class="setting-info">
             <h4>SMS Alerts</h4>
