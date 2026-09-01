@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <!-- FIX #12: Removed user-scalable=no for accessibility -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a0a14">
   <meta name="description" content="SchoolHeat Ultimate — Real-time heat index monitoring for Mahaplag National High School">
   <title>SchoolHeat Ultimate — TUKLAS 2026</title>
@@ -491,13 +492,14 @@
         </div>
         <div class="map-scroll-wrap" id="map-scroll-wrap">
           <div class="map-wrap" id="map-wrap">
+            <!-- FIX #3: Guard onerror against app not existing -->
             <img 
               src="assets/campus-map.jpg" 
               alt="Campus Map" 
               class="map-image" 
               id="map-img"
               onload="if (window.app && typeof window.app.syncMapPins === 'function') window.app.syncMapPins()"
-              onerror="app.tryNextMapImage(this)"
+              onerror="if(window.app&&app.tryNextMapImage)app.tryNextMapImage(this)"
               data-attempt="0"
             >
             <div class="map-fallback" id="map-fallback">
@@ -560,7 +562,8 @@
           </label>
         </div>
 
-        <div class="glass-card setting-item" id="firebase-url-row">
+        <!-- FIX #8: Row starts hidden but JS will sync visibility to checkbox state -->
+        <div class="glass-card setting-item" id="firebase-url-row" style="display:none;">
           <div class="setting-info" style="width:100%;">
             <h4>Firebase Database URL</h4>
             <p style="font-size:0.75rem;color:#6b7280;">Paste your Realtime Database URL here</p>
