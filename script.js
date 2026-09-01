@@ -460,88 +460,131 @@ class SchoolHeatApp {
     }
   }
 
-  performSensorReading() {
-    // REAL ARDUINO MODE
-    if (!this.settings.demoMode) {
+  // ============================================
+  // MOBILE-FRIENDLY SENSOR READING
+  // Priority: Firebase Cloud → Local Bridge → Serial → Demo
+  // Works on iOS Safari, Android Chrome, and Desktop
+  // ============================================
+  async performSensorReading() {
+    const locSelect = document.getElementById('location-select');
+    const locName = locSelect ? locSelect.value : null;
+
+    if (!locName) {
+      this.toast('Please select a location before reading.', 'warning');
+      this.stopAutoRead();
+      return;
+    }
+
+    let temp = null;
+    let hum = null;
+    let source = '';
+
+    // ── TRY 1: Firebase Cloud (works on ANY phone with internet) ──
+    if (!temp && this.firebaseUrl) {
+      try {
+        const url = this.firebaseUrl.replace(/\/$/, '') + '/sensor_data.json';
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const res = await fetch(url, { 
+          cache: 'no-store',
+          signal: controller.signal 
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.temperature !== undefined && data.humidity !== undefined) {
+            temp = parseFloat(data.temperature);
+            hum = parseFloat(data.humidity);
+            source = 'Cloud';
+          }
+        }
+      } catch (e) {
+        console.log('Firebase fetch failed:', e.message);
+      }
+    }
+
+    // ── TRY 2: Local Bridge (same WiFi network) ──
+    if (!temp && this.localUrl) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+        const res = await fetch(this.localUrl + '/data', { 
+          cache: 'no-store',
+          signal: controller.signal 
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.temperature !== undefined && data.humidity !== undefined) {
+            temp = parseFloat(data.temperature);
+            hum = parseFloat(data.humidity);
+            source = 'Local';
+          }
+        }
+      } catch (e) {
+        console.log('Local fetch failed:', e.message);
+      }
+    }
+
+    // ── TRY 3: Web Serial (desktop Chrome only) ──
+    if (!temp && !this.settings.demoMode) {
       if (!this.serialConnected) {
         this.toast('Arduino disconnected. Stopping Auto-Read.', 'error');
         this.stopAutoRead();
         return;
       }
       if (!this.lastSerialData) {
-        this.toast('Waiting for Arduino data... Make sure your sketch prints T:26.0,H:63.2', 'warning');
+        this.toast('Waiting for Arduino data...', 'warning');
         return;
       }
-      const locSelect = document.getElementById('location-select');
-      const locName = locSelect ? locSelect.value : null;
-      if (!locName) {
-        this.toast('Please select a location before reading from Arduino.', 'warning');
-        this.stopAutoRead();
-        return;
+      temp = this.lastSerialData.temp;
+      hum = this.lastSerialData.hum;
+      source = 'Serial';
+    }
+
+    // ── FALLBACK: Demo Mode (no sensor connected) ──
+    if (!temp) {
+      if (!this.settings.demoMode) {
+        this.toast('No sensor connected. Switching to Demo Mode.', 'warning');
+        this.settings.demoMode = true;
       }
-      const temp = this.lastSerialData.temp;
-      const hum = this.lastSerialData.hum;
-      const hi = this.calculateHeatIndex(temp, hum);
-      const status = this.getStatus(hi);
-      const quality = this.getQualityScore(temp, hum);
-      const reading = {
-        id: Date.now(),
-        location: locName,
-        temperature: parseFloat(temp.toFixed(1)),
-        humidity: parseFloat(hum.toFixed(1)),
-        heatIndex: parseFloat(hi.toFixed(2)),
-        status,
-        quality: quality.label,
-        qualityClass: quality.class,
-        timestamp: new Date().toISOString()
-      };
-      this.readings.unshift(reading);
-      this.saveReadings();
-      this.updateDashboard();
-      this.renderHistory();
-      this.renderMap();
-      this.checkAlerts();
-      this.updateMonitorGauge();
-      const tempInput = document.getElementById('temp-input');
-      const humInput = document.getElementById('humidity-input');
-      if (tempInput) tempInput.value = temp.toFixed(1);
-      if (humInput) humInput.value = hum.toFixed(1);
-      this.updatePreview();
-      this.toast(`Saved: ${locName} — ${hi.toFixed(1)}°C (${STATUS_LABELS[status]})`, 'success');
-      return;
+
+      const loc = LOCATIONS[this.autoReadLocIndex];
+      this.autoReadLocIndex = (this.autoReadLocIndex + 1) % LOCATIONS.length;
+
+      let last = this.lastSensorValues[loc.name];
+      if (!last) {
+        last = { temp: loc.baseTemp, hum: loc.baseHum };
+      }
+
+      const tempDrift = (Math.random() - 0.5) * 1.2;
+      const humDrift = (Math.random() - 0.5) * 4;
+
+      temp = last.temp + tempDrift;
+      hum = last.hum + humDrift;
+      temp = Math.max(20, Math.min(55, temp));
+      hum = Math.max(30, Math.min(98, hum));
+
+      const hour = new Date().getHours();
+      const timeFactor = Math.sin((hour - 6) / 12 * Math.PI) * 2.5;
+      temp += timeFactor;
+
+      this.lastSensorValues[loc.name] = { temp, hum };
+      source = 'Demo';
     }
 
-    // DEMO MODE
-    const loc = LOCATIONS[this.autoReadLocIndex];
-    this.autoReadLocIndex = (this.autoReadLocIndex + 1) % LOCATIONS.length;
-
-    let last = this.lastSensorValues[loc.name];
-    if (!last) {
-      last = { temp: loc.baseTemp, hum: loc.baseHum };
-    }
-
-    const tempDrift = (Math.random() - 0.5) * 1.2;
-    const humDrift = (Math.random() - 0.5) * 4;
-
-    let temp = last.temp + tempDrift;
-    let hum = last.hum + humDrift;
-
-    temp = Math.max(20, Math.min(55, temp));
-    hum = Math.max(30, Math.min(98, hum));
-
-    const hour = new Date().getHours();
-    const timeFactor = Math.sin((hour - 6) / 12 * Math.PI) * 2.5;
-    temp += timeFactor;
-
-    this.lastSensorValues[loc.name] = { temp, hum };
-
+    // ── SAVE READING ──
     const hi = this.calculateHeatIndex(temp, hum);
     const status = this.getStatus(hi);
     const quality = this.getQualityScore(temp, hum);
 
     const reading = {
       id: Date.now(),
-      location: loc.name,
+      location: locName,
       temperature: parseFloat(temp.toFixed(1)),
       humidity: parseFloat(hum.toFixed(1)),
       heatIndex: parseFloat(hi.toFixed(2)),
@@ -559,16 +602,16 @@ class SchoolHeatApp {
     this.checkAlerts();
     this.updateMonitorGauge();
 
-    const locSelect = document.getElementById('location-select');
-    if (locSelect) locSelect.value = loc.name;
     const tempInput = document.getElementById('temp-input');
     const humInput = document.getElementById('humidity-input');
     if (tempInput) tempInput.value = temp.toFixed(1);
     if (humInput) humInput.value = hum.toFixed(1);
     this.updatePreview();
 
-    if (this.autoReadLocIndex % 5 === 0) {
-      this.toast(`Scanning: ${loc.name} — ${hi.toFixed(1)}°C`, 'info');
+    if (source === 'Demo') {
+      this.toast(`Demo: ${locName} — ${hi.toFixed(1)}°C`, 'info');
+    } else {
+      this.toast(`Sensor (${source}): ${locName} — ${hi.toFixed(1)}°C`, 'success');
     }
   }
 
@@ -1323,44 +1366,113 @@ class SchoolHeatApp {
 
     ctx.clearRect(0, 0, w, h);
 
-    if (this.readings.length < 3) {
+    if (this.readings.length < 5) {
       ctx.fillStyle = '#6b7280';
       ctx.font = '12px Inter, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Collect at least 3 days of data for forecast', w/2, h/2);
+      ctx.fillText('Collect at least 5 readings for accurate forecast', w/2, h/2);
       document.getElementById('forecast-summary').innerHTML = `
         <div class="empty-state compact">
           <div class="empty-icon small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17.5 19c0-1.7-1.3-3-3-3c-1.1 0-2.1.6-2.6 1.5L9 14.5c-.5-.9-1.5-1.5-2.6-1.5c-1.7 0-3 1.3-3 3"/><path d="M22 19c0-1.7-1.3-3-3-3c-1.1 0-2.1.6-2.6 1.5L13.5 14.5c-.5-.9-1.5-1.5-2.6-1.5c-1.7 0-3 1.3-3 3"/><path d="M2 19c0-1.7 1.3-3 3-3c1.1 0 2.1.6 2.6 1.5L10.5 14.5c.5-.9 1.5-1.5 2.6-1.5c1.7 0 3 1.3 3 3"/></svg></div>
-          <div class="empty-desc">Collect at least 3 days of data to generate a forecast</div>
+          <div class="empty-desc">Collect at least 5 readings to generate an accurate forecast</div>
         </div>`;
       document.getElementById('forecast-cards').innerHTML = '';
       return;
     }
 
-    const recent = this.readings.slice(0, Math.min(this.readings.length, 20)).reverse();
-    const n = recent.length;
-    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-    recent.forEach((r, i) => {
-      sumX += i;
-      sumY += r.heatIndex;
-      sumXY += i * r.heatIndex;
-      sumX2 += i * i;
-    });
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX) || 0;
-    const intercept = (sumY - slope * sumX) / n;
+    // ============================================
+    // ACCURATE PREDICTION: Holt's Double Exponential Smoothing
+    // ============================================
+    //
+    // FORMULA:
+    //   L_t = α · Y_t + (1−α) · (L_{t−1} + T_{t−1})   [Level]
+    //   T_t = β · (L_t − L_{t−1}) + (1−β) · T_{t−1}   [Trend]
+    //   F_{t+h} = L_t + h · T_t + seasonal_d           [Forecast]
+    //
+    //   α = 0.35  (level responsiveness)
+    //   β = 0.15  (trend stability)
+    //
+    //   Confidence: margin = 1.5 · MAD · √(1 + h)
+    // ============================================
 
+    // Sort readings chronologically
+    const sorted = [...this.readings].sort(
+      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+    );
+    const Y = sorted.map(r => r.heatIndex);
+    const n = Y.length;
+
+    // Holt's parameters
+    const ALPHA = 0.35;
+    const BETA  = 0.15;
+
+    // Initialize
+    let L = Y[0];
+    let T = n >= 2 ? Y[1] - Y[0] : 0;
+
+    // Run smoothing through all historical readings
+    const fitted = [];
+    for (let i = 0; i < n; i++) {
+      if (i === 0) {
+        fitted.push(Y[0]);
+        continue;
+      }
+      const prevL = L;
+      L = ALPHA * Y[i] + (1 - ALPHA) * (L + T);
+      T = BETA * (L - prevL) + (1 - BETA) * T;
+      fitted.push(prevL + T);
+    }
+
+    // Mean Absolute Deviation (MAD) for confidence intervals
+    let mad = 0;
+    for (let i = 0; i < n; i++) {
+      mad += Math.abs(Y[i] - fitted[i]);
+    }
+    mad = mad / n;
+    if (mad < 0.5) mad = 0.5;
+
+    // Seasonal adjustment (only if 15+ readings)
+    let seasonal = [0, 0, 0, 0, 0, 0, 0];
+    if (n >= 15) {
+      const dayAvgs = [0, 0, 0, 0, 0, 0, 0];
+      const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+      const overallMean = Y.reduce((s, v) => s + v, 0) / n;
+      sorted.forEach(r => {
+        const d = new Date(r.timestamp).getDay();
+        dayAvgs[d] += r.heatIndex;
+        dayCounts[d]++;
+      });
+      for (let d = 0; d < 7; d++) {
+        if (dayCounts[d] >= 2) {
+          seasonal[d] = (dayAvgs[d] / dayCounts[d]) - overallMean;
+        }
+      }
+    }
+
+    // Generate 7-day forecast
     const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const today = new Date();
     const forecast = [];
-    for (let i = 1; i <= 7; i++) {
+    for (let h = 1; h <= 7; h++) {
       const d = new Date(today);
-      d.setDate(d.getDate() + i);
-      const val = intercept + slope * (n + i - 1);
+      d.setDate(d.getDate() + h);
+      const dayIndex = d.getDay();
+
+      // Holt's forecast: F_{t+h} = L_t + h·T_t + seasonal
+      let val = L + h * T + seasonal[dayIndex];
+
+      // Confidence margin grows with horizon
+      const margin = 1.5 * mad * Math.sqrt(1 + h);
+
+      // Clamp to realistic bounds
+      val = Math.max(20, Math.min(55, val));
+
       forecast.push({
-        day: days[d.getDay()],
+        day: days[dayIndex],
         date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: Math.max(20, val),
-        status: this.getStatus(Math.max(20, val))
+        value: val,
+        margin: margin,
+        status: this.getStatus(val)
       });
     }
 
@@ -1512,13 +1624,24 @@ class SchoolHeatApp {
       const avgStatus = this.getStatus(avg);
       const maxFc = Math.max(...forecast.map(f => f.value));
       const minFc = Math.min(...forecast.map(f => f.value));
+
+      // Reliability score based on data quantity
+      let reliability;
+      if (n >= 20) reliability = 'High';
+      else if (n >= 10) reliability = 'Medium';
+      else reliability = 'Low';
+      const relColor = { High: '#10b981', Medium: '#f59e0b', Low: '#ef4444' };
+
       summary.innerHTML = `
         <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
           <span>Avg: <strong style="color:${STATUS_COLORS[avgStatus]}">${avg.toFixed(1)}°C</strong></span>
           <span>High: <strong style="color:${STATUS_COLORS[this.getStatus(maxFc)]}">${maxFc.toFixed(1)}°C</strong></span>
           <span>Low: <strong style="color:${STATUS_COLORS[this.getStatus(minFc)]}">${minFc.toFixed(1)}°C</strong></span>
         </div>
-        <div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);">Next 7 days forecast based on ${n} recent readings</div>
+        <div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);">
+          Holt's Double Exponential Smoothing • ${n} readings • 
+          <span style="color:${relColor[reliability]}">● ${reliability} Confidence</span>
+        </div>
       `;
     }
 
