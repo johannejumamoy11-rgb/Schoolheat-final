@@ -1,10 +1,9 @@
-const CACHE_NAME = 'schoolheat-internet-v3';
+const CACHE_NAME = 'schoolheat-v4';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './script.js',
-  './cloud_config.js',
   './manifest.json',
   './assets/app-logo.png',
   './assets/school-logo.png',

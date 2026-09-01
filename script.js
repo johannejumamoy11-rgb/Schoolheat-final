@@ -80,16 +80,6 @@ class SchoolHeatApp {
     this.serialReader = null;
     this.serialConnected = false;
     this.lastSerialData = null;
-    this.bridgeConnected = false;
-    this.bridgeTimer = null;
-    this.lastBridgeTimestamp = null;
-    this.sharedSyncTimer = null;
-    this.sharedSyncBusy = false;
-    this.cloudSyncTimer = null;
-    this.cloudSyncBusy = false;
-    this.cloudToken = null;
-    this.cloudRefreshToken = null;
-    this.cloudTokenExpiry = 0;
     this.lastSensorValues = {};
     this.init();
   }
@@ -110,14 +100,6 @@ class SchoolHeatApp {
     this.setupPullToRefresh();
     this.setupResizeHandler();
     this.hideLoader();
-    // Start shared Arduino synchronization in the background.
-    // This keeps Dashboard, History, and Map consistent across devices.
-    if (!this.settings.demoMode) {
-      setTimeout(() => {
-        this.startCloudSync();
-        this.startSharedSync();
-      }, 300);
-    }
   }
 
   hideLoader() {
@@ -197,8 +179,6 @@ class SchoolHeatApp {
     const humInput = document.getElementById('humidity-input');
     if (tempInput) tempInput.addEventListener('input', () => this.updatePreview());
     if (humInput) humInput.addEventListener('input', () => this.updatePreview());
-    const locationSelect = document.getElementById('location-select');
-    if (locationSelect) locationSelect.addEventListener('change', () => this.setBridgeLocation(locationSelect.value));
 
     document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
@@ -389,7 +369,6 @@ class SchoolHeatApp {
     const select = document.getElementById('location-select');
     if (select) {
       select.value = loc;
-      this.setBridgeLocation(loc);
       this.toast(`Selected: ${loc}`, 'info');
     }
   }
@@ -422,36 +401,8 @@ class SchoolHeatApp {
 
   async startAutoRead() {
     if (!this.settings.demoMode) {
-      // Prefer the local SchoolHeat Bridge when the app is served by it.
-      // This allows the Arduino to stay connected to the desktop while
-      // phones/tablets view the same live sensor stream over Wi-Fi.
-      const bridgeReady = await this.startBridgeRead();
-      if (bridgeReady) {
-        this.autoReadActive = true;
-        this.autoReadLocIndex = 0;
-        this.updateAutoReadButton();
-        const overlay = document.getElementById('auto-read-overlay');
-        if (overlay) {
-          overlay.classList.add('active');
-          setTimeout(() => overlay.classList.remove('active'), 1500);
-        }
-        this.toast('Live Arduino Bridge connected', 'success');
-        return;
-      }
-
-      // Hosted copies (GitHub Pages, etc.) must use the internet/cloud bridge.
-      // Do not fall back to Web Serial here, because a hosted page cannot
-      // reach the Arduino through the SchoolHeat desktop bridge automatically.
-      // This also prevents the confusing "Failed to open serial port" error.
-      if (!this.getBridgeBaseUrl()) {
-        this.toast('Cloud Live mode: keep the Arduino connected to the bridge computer. This device receives readings automatically.', 'info');
-        return;
-      }
-
-      // Direct Web Serial is only a fallback when the page is running locally
-      // and the user intentionally uses a supported desktop browser.
       if (!navigator.serial) {
-        this.toast('No SchoolHeat Bridge found. Start the desktop Bridge first.', 'error');
+        this.toast('Web Serial not supported. Use Chrome/Edge desktop, or enable Demo Mode in Settings.', 'error');
         return;
       }
       const connected = await this.connectSerial();
@@ -483,7 +434,6 @@ class SchoolHeatApp {
       clearInterval(this.autoReadInterval);
       this.autoReadInterval = null;
     }
-    this.stopBridgeRead();
     this.disconnectSerial();
     this.updateAutoReadButton();
     this.toast('Auto-Read OFF', 'info');
@@ -543,12 +493,8 @@ class SchoolHeatApp {
         status,
         quality: quality.label,
         qualityClass: quality.class,
-        timestamp: new Date().toISOString(),
-        sensorTimestamp: new Date().toISOString(),
-        source: 'arduino'
+        timestamp: new Date().toISOString()
       };
-      // Publish direct Web Serial readings to the internet cloud too.
-      this.postCloudReading(reading, reading.sensorTimestamp);
       this.readings.unshift(reading);
       this.saveReadings();
       this.updateDashboard();
@@ -556,7 +502,6 @@ class SchoolHeatApp {
       this.renderMap();
       this.checkAlerts();
       this.updateMonitorGauge();
-      this.updateRecentLocations();
       const tempInput = document.getElementById('temp-input');
       const humInput = document.getElementById('humidity-input');
       if (tempInput) tempInput.value = temp.toFixed(1);
@@ -624,413 +569,6 @@ class SchoolHeatApp {
 
     if (this.autoReadLocIndex % 5 === 0) {
       this.toast(`Scanning: ${loc.name} — ${hi.toFixed(1)}°C`, 'info');
-    }
-  }
-
-  /* ============================================
-     INTERNET CLOUD SYNC — WORKS WITHOUT SAME WI-FI
-     ============================================ */
-
-  getCloudConfig() {
-    const cfg = window.SCHOOLHEAT_CLOUD || {};
-    if (!cfg.enabled || !cfg.apiKey || cfg.apiKey.startsWith('PASTE_') ||
-        !cfg.databaseURL || cfg.databaseURL.includes('YOUR_PROJECT') ||
-        !cfg.projectId || cfg.projectId === 'YOUR_PROJECT') return null;
-    return cfg;
-  }
-
-  async cloudAuthenticate(force = false) {
-    const cfg = this.getCloudConfig();
-    if (!cfg) return false;
-    if (!force && this.cloudToken && Date.now() < this.cloudTokenExpiry - 60000) return true;
-    try {
-      const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(cfg.apiKey)}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ returnSecureToken: true })
-      });
-      if (!response.ok) throw new Error('Firebase anonymous sign-in failed');
-      const data = await response.json();
-      this.cloudToken = data.idToken;
-      this.cloudRefreshToken = data.refreshToken || null;
-      this.cloudTokenExpiry = Date.now() + (Number(data.expiresIn || 3600) * 1000);
-      return true;
-    } catch (err) {
-      this.cloudToken = null;
-      return false;
-    }
-  }
-
-  cloudKey(value) {
-    return btoa(unescape(encodeURIComponent(String(value))))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/g, '');
-  }
-
-  async cloudRequest(path, options = {}, retry = true) {
-    const cfg = this.getCloudConfig();
-    if (!cfg) return null;
-    if (!(await this.cloudAuthenticate())) return null;
-    const separator = path.includes('?') ? '&' : '?';
-    const url = `${cfg.databaseURL.replace(/\/$/, '')}/${cfg.path}/${path}${separator}auth=${encodeURIComponent(this.cloudToken)}`;
-    const response = await fetch(url, { cache: 'no-store', ...options });
-    if (response.status === 401 && retry) {
-      await this.cloudAuthenticate(true);
-      return this.cloudRequest(path, options, false);
-    }
-    if (!response.ok) throw new Error(`Cloud request failed (${response.status})`);
-    if (response.status === 204) return null;
-    return response.json();
-  }
-
-  async startCloudSync() {
-    if (!this.getCloudConfig() || this.settings.demoMode) return false;
-    const ok = await this.cloudAuthenticate();
-    if (!ok) return false;
-    await this.syncCloudLocation();
-    await this.syncCloudReadings();
-    if (this.cloudSyncTimer) clearInterval(this.cloudSyncTimer);
-    this.cloudSyncTimer = setInterval(() => this.syncCloudReadings(), 2000);
-    return true;
-  }
-
-  async syncCloudLocation() {
-    const cfg = this.getCloudConfig();
-    if (!cfg) return;
-    try {
-      const remote = await this.cloudRequest('location.json');
-      const select = document.getElementById('location-select');
-      if (remote && select && [...select.options].some(o => o.value === remote)) {
-        select.value = remote;
-      } else if (select?.value) {
-        await this.cloudRequest('location.json', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(select.value)
-        });
-      }
-    } catch (err) {}
-  }
-
-  async setCloudLocation(location) {
-    if (!location || !this.getCloudConfig()) return;
-    try {
-      await this.cloudRequest('location.json', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(location)
-      });
-    } catch (err) {}
-  }
-
-  async syncCloudReadings() {
-    if (this.cloudSyncBusy || !this.getCloudConfig() || this.settings.demoMode) return;
-    this.cloudSyncBusy = true;
-    try {
-      const data = await this.cloudRequest('readings.json?orderBy=%22sensorTimestamp%22&limitToLast=500');
-      const incoming = data && typeof data === 'object' ? Object.values(data) : [];
-      const localBySensor = new Map(this.readings.filter(r => r.sensorTimestamp).map(r => [r.sensorTimestamp, r]));
-      let changed = false;
-      for (const r of incoming) {
-        const key = r.sensorTimestamp || r.timestamp;
-        if (!key || localBySensor.has(key) || r.temperature == null || r.humidity == null) continue;
-        const temp = Number(r.temperature), hum = Number(r.humidity);
-        const hi = r.heatIndex != null ? Number(r.heatIndex) : this.calculateHeatIndex(temp, hum);
-        const quality = this.getQualityScore(temp, hum);
-        const complete = {
-          id: r.id || Date.now(), location: r.location || document.getElementById('location-select')?.value,
-          temperature: Number(temp.toFixed(1)), humidity: Number(hum.toFixed(1)),
-          heatIndex: Number(hi.toFixed(2)), status: r.status || this.getStatus(hi),
-          quality: r.quality || quality.label, qualityClass: r.qualityClass || quality.class,
-          timestamp: r.timestamp || key, sensorTimestamp: key, source: 'arduino'
-        };
-        if (!complete.location) continue;
-        this.readings.push(complete);
-        localBySensor.set(key, complete);
-        changed = true;
-      }
-      if (changed) {
-        this.readings.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-        this.saveReadings(); this.updateDashboard(); this.renderHistory(); this.renderMap();
-        this.checkAlerts(); this.updateRecentLocations(); this.updateMonitorGauge();
-      }
-    } catch (err) {
-      // Cloud may be temporarily unavailable; keep local readings intact.
-    } finally {
-      this.cloudSyncBusy = false;
-    }
-  }
-
-  async postCloudReading(reading, sensorTimestamp) {
-    const cfg = this.getCloudConfig();
-    if (!cfg) return false;
-    try {
-      const key = this.cloudKey(sensorTimestamp || reading.timestamp);
-      await this.cloudRequest(`readings/${key}.json`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...reading, sensorTimestamp: sensorTimestamp || reading.timestamp })
-      });
-      return true;
-    } catch (err) { return false; }
-  }
-
-  /* ============================================
-     SCHOOLHEAT BRIDGE — DESKTOP ARDUINO TO PHONE
-     ============================================ */
-
-  getBridgeBaseUrl() {
-    // The local Python bridge is used only when the page is actually served
-    // by the bridge. GitHub Pages and other hosted copies use cloud sync.
-    const host = location.hostname || '';
-    const localHost = host === 'localhost' || host === '127.0.0.1' || host === '::1' ||
-      /^10\./.test(host) || /^192\.168\./.test(host) ||
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
-    return (location.protocol === 'http:' && localHost) ? location.origin : '';
-  }
-
-  async startBridgeRead() {
-    const base = this.getBridgeBaseUrl();
-    if (!base) return false;
-    try {
-      const response = await fetch(base + '/api/status', { cache: 'no-store' });
-      if (!response.ok) return false;
-      const status = await response.json();
-      if (!status.bridge) return false;
-
-      this.bridgeConnected = true;
-      this.lastBridgeTimestamp = null;
-      if (status.location) {
-        const select = document.getElementById('location-select');
-        if (select && [...select.options].some(o => o.value === status.location)) select.value = status.location;
-      } else {
-        const select = document.getElementById('location-select');
-        if (select && select.value) await this.setBridgeLocation(select.value);
-      }
-      await this.syncSharedReadings();
-      await this.fetchBridgeReading();
-      this.bridgeTimer = setInterval(() => this.fetchBridgeReading(), 1000);
-      return true;
-    } catch (err) {
-      this.bridgeConnected = false;
-      return false;
-    }
-  }
-
-  async startSharedSync() {
-    const base = this.getBridgeBaseUrl();
-    if (!base || this.settings.demoMode) return false;
-    try {
-      const response = await fetch(base + '/api/status', { cache: 'no-store' });
-      if (!response.ok) return false;
-      const status = await response.json();
-      if (!status.bridge) return false;
-      this.bridgeConnected = true;
-      if (status.location) {
-        const select = document.getElementById('location-select');
-        if (select && [...select.options].some(o => o.value === status.location)) select.value = status.location;
-      } else {
-        const select = document.getElementById('location-select');
-        if (select && select.value) this.setBridgeLocation(select.value);
-      }
-      await this.syncSharedReadings();
-      await this.fetchBridgeReading();
-      if (this.sharedSyncTimer) clearInterval(this.sharedSyncTimer);
-      this.sharedSyncTimer = setInterval(() => this.syncSharedReadings(), 1500);
-      return true;
-    } catch (err) {
-      this.bridgeConnected = false;
-      return false;
-    }
-  }
-
-  async fetchBridgeReading() {
-    if (!this.bridgeConnected) return;
-    const base = this.getBridgeBaseUrl();
-    if (!base) return;
-    try {
-      const response = await fetch(base + '/api/latest', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Bridge unavailable');
-      const data = await response.json();
-      if (!data || data.temperature == null || data.humidity == null || !data.timestamp) return;
-
-      const stamp = data.timestamp;
-      if (stamp === this.lastBridgeTimestamp) return;
-      this.lastBridgeTimestamp = stamp;
-      this.lastSerialData = { temp: Number(data.temperature), hum: Number(data.humidity) };
-
-      const locSelect = document.getElementById('location-select');
-      const locName = locSelect ? locSelect.value : null;
-      if (!locName) return;
-
-      // Calculate exactly the same way the existing SchoolHeat code does.
-      const temp = this.lastSerialData.temp;
-      const hum = this.lastSerialData.hum;
-      const hi = this.calculateHeatIndex(temp, hum);
-      const status = this.getStatus(hi);
-      const quality = this.getQualityScore(temp, hum);
-      const reading = {
-        id: Date.now(),
-        location: locName,
-        temperature: parseFloat(temp.toFixed(1)),
-        humidity: parseFloat(hum.toFixed(1)),
-        heatIndex: parseFloat(hi.toFixed(2)),
-        status,
-        quality: quality.label,
-        qualityClass: quality.class,
-        timestamp: stamp,
-        sensorTimestamp: stamp,
-        source: 'arduino'
-      };
-
-      // Do not create a local duplicate if this sample was already synced.
-      if (!this.readings.some(r => r.sensorTimestamp === stamp)) {
-        this.readings.unshift(reading);
-        this.saveReadings();
-        this.updateDashboard();
-        this.renderHistory();
-        this.renderMap();
-        this.checkAlerts();
-        this.updateRecentLocations();
-        this.updateMonitorGauge();
-      }
-
-      const tempInput = document.getElementById('temp-input');
-      const humInput = document.getElementById('humidity-input');
-      if (tempInput) tempInput.value = temp.toFixed(1);
-      if (humInput) humInput.value = hum.toFixed(1);
-      this.updatePreview();
-      await this.postSharedReading(reading, stamp);
-      await this.postCloudReading(reading, stamp);
-    } catch (err) {
-      this.bridgeConnected = false;
-      if (this.bridgeTimer) {
-        clearInterval(this.bridgeTimer);
-        this.bridgeTimer = null;
-      }
-    }
-  }
-
-  stopBridgeRead() {
-    this.bridgeConnected = false;
-    if (this.bridgeTimer) {
-      clearInterval(this.bridgeTimer);
-      this.bridgeTimer = null;
-    }
-    if (this.sharedSyncTimer) {
-      clearInterval(this.sharedSyncTimer);
-      this.sharedSyncTimer = null;
-    }
-  }
-
-  async syncSharedReadings() {
-    if (this.sharedSyncBusy) return;
-    const base = this.getBridgeBaseUrl();
-    if (!base) return;
-    this.sharedSyncBusy = true;
-    try {
-      const response = await fetch(base + '/api/readings', { cache: 'no-store' });
-      if (!response.ok) return;
-      const data = await response.json();
-      const incoming = Array.isArray(data.readings) ? data.readings : [];
-      const localBySensor = new Map(
-        this.readings.filter(r => r.sensorTimestamp).map(r => [r.sensorTimestamp, r])
-      );
-      const select = document.getElementById('location-select');
-      const defaultLocation = select?.value || null;
-      let changed = false;
-
-      for (const r of incoming) {
-        const key = r.sensorTimestamp || r.timestamp;
-        if (!key || localBySensor.has(key)) continue;
-
-        let complete = r;
-        // Raw samples are calculated here with the existing SchoolHeat formula.
-        if (r.heatIndex == null) {
-          const location = r.location || defaultLocation;
-          if (!location || r.temperature == null || r.humidity == null) continue;
-          const temp = Number(r.temperature);
-          const hum = Number(r.humidity);
-          const hi = this.calculateHeatIndex(temp, hum);
-          const quality = this.getQualityScore(temp, hum);
-          complete = {
-            id: Date.now(),
-            location,
-            temperature: parseFloat(temp.toFixed(1)),
-            humidity: parseFloat(hum.toFixed(1)),
-            heatIndex: parseFloat(hi.toFixed(2)),
-            status: this.getStatus(hi),
-            quality: quality.label,
-            qualityClass: quality.class,
-            timestamp: r.sensorTimestamp || new Date().toISOString(),
-            sensorTimestamp: key,
-            source: 'arduino'
-          };
-          await this.postSharedReading(complete, key);
-          await this.postCloudReading(complete, key);
-        } else {
-          complete = {
-            id: r.id || Date.now(),
-            location: r.location,
-            temperature: Number(r.temperature),
-            humidity: Number(r.humidity),
-            heatIndex: Number(r.heatIndex),
-            status: r.status,
-            quality: r.quality || 'Good',
-            qualityClass: r.qualityClass || '',
-            timestamp: r.timestamp || new Date().toISOString(),
-            sensorTimestamp: key,
-            source: r.source || 'arduino'
-          };
-        }
-
-        this.readings.push(complete);
-        localBySensor.set(key, complete);
-        changed = true;
-      }
-
-      if (changed) {
-        this.readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        this.saveReadings();
-        this.updateDashboard();
-        this.renderHistory();
-        this.renderMap();
-        this.checkAlerts();
-        this.updateRecentLocations();
-        this.updateMonitorGauge();
-      }
-    } catch (err) {
-      // The bridge can be temporarily offline; local data remains available.
-    } finally {
-      this.sharedSyncBusy = false;
-    }
-  }
-
-  async setBridgeLocation(location) {
-    const base = this.getBridgeBaseUrl();
-    if (!location) return;
-    if (base) try {
-      await fetch(base + '/api/location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location })
-      });
-    } catch (err) {}
-    await this.setCloudLocation(location);
-  }
-
-  async postSharedReading(reading, sensorTimestamp) {
-    const base = this.getBridgeBaseUrl();
-    if (!base) return;
-    try {
-      await fetch(base + '/api/readings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...reading, sensorTimestamp: sensorTimestamp || reading.timestamp })
-      });
-    } catch (err) {
-      // Keep the reading locally if the bridge is temporarily unavailable.
     }
   }
 
