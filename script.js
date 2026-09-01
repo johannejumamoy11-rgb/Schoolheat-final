@@ -439,9 +439,19 @@ class SchoolHeatApp {
         return;
       }
 
-      // Keep the original direct Web Serial path for supported desktop browsers.
+      // Hosted copies (GitHub Pages, etc.) must use the internet/cloud bridge.
+      // Do not fall back to Web Serial here, because a hosted page cannot
+      // reach the Arduino through the SchoolHeat desktop bridge automatically.
+      // This also prevents the confusing "Failed to open serial port" error.
+      if (!this.getBridgeBaseUrl()) {
+        this.toast('Cloud Live mode: keep the Arduino connected to the bridge computer. This device receives readings automatically.', 'info');
+        return;
+      }
+
+      // Direct Web Serial is only a fallback when the page is running locally
+      // and the user intentionally uses a supported desktop browser.
       if (!navigator.serial) {
-        this.toast('No SchoolHeat Bridge found. Use the desktop Bridge, or Chrome/Edge with Arduino USB.', 'error');
+        this.toast('No SchoolHeat Bridge found. Start the desktop Bridge first.', 'error');
         return;
       }
       const connected = await this.connectSerial();
