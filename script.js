@@ -68,6 +68,18 @@ class SchoolHeatApp {
       this.settings = defaultSettings;
       localStorage.removeItem('sh_settings');
     }
+         // Restore Firebase URL
+    const savedFirebaseUrl = localStorage.getItem('schoolheat_firebase_url');
+    if (savedFirebaseUrl) {
+      this.firebaseUrl = savedFirebaseUrl;
+      const urlInput = document.getElementById('firebase-url-input');
+      if (urlInput) urlInput.value = savedFirebaseUrl;
+      const statusEl = document.getElementById('firebase-status');
+      if (statusEl) {
+        statusEl.textContent = 'Saved';
+        statusEl.style.color = '#10b981';
+      }
+    }
     this.currentTab = 'dashboard';
     this.forecastChartLoaded = false;
     this.trendChartLoaded = false;
@@ -206,6 +218,13 @@ document.getElementById('setting-firebase').addEventListener('change', (e) => {
   this.settings.firebaseEnabled = e.target.checked;
   this.saveSettings();
 });
+         // Firebase URL input show/hide
+    document.getElementById('setting-firebase').addEventListener('change', (e) => {
+      const urlRow = document.getElementById('firebase-url-row');
+      if (urlRow) urlRow.style.display = e.target.checked ? 'block' : 'none';
+      this.settings.firebaseEnabled = e.target.checked;
+      this.saveSettings();
+    });
 
 // Load saved Firebase URL
 const savedUrl = localStorage.getItem('schoolheat_firebase_url');
@@ -2043,6 +2062,21 @@ if (savedUrl) {
     }
     const msg = `🧪 Test Alert from SchoolHeat: System is functioning correctly. Current time: ${new Date().toLocaleTimeString()}`;
     this.sendSMSAlert(phone, msg, 'test');
+  }
+     // ============================================
+  // FIREBASE CONNECTION
+  // ============================================
+  connectFirebase() {
+    const url = document.getElementById('firebase-url-input').value.trim();
+    if (!url) {
+      this.toast('Please enter a Firebase URL', 'warning');
+      return;
+    }
+    this.firebaseUrl = url;
+    localStorage.setItem('schoolheat_firebase_url', url);
+    document.getElementById('firebase-status').textContent = 'Connected';
+    document.getElementById('firebase-status').style.color = '#10b981';
+    this.toast('Firebase connected successfully', 'success');
   }
 
   sendSMSAlert(phone, message, type = 'alert') {
