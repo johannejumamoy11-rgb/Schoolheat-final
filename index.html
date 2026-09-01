@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- FIX #12: Removed user-scalable=no for accessibility -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0a0a14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="SchoolHeat Ultimate — Real-time heat index monitoring for Mahaplag National High School">
   <title>SchoolHeat Ultimate — TUKLAS 2026</title>
 
@@ -108,6 +110,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="assets/app-logo.png">
   <link rel="icon" type="image/png" href="assets/app-logo.png">
+<base target="_blank">
 </head>
 <body>
 
@@ -361,7 +364,7 @@
             </div>
           </div>
           <div class="sensor-text">Reading Sensor...</div>
-          <div class="sensor-sub">DHT22 • Arduino Uno • Pin 3</div>
+          <div class="sensor-sub">DHT22 • Arduino Uno</div>
         </div>
       </div>
     </section>
@@ -464,7 +467,7 @@
             <div class="empty-icon small">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17.5 19c0-1.7-1.3-3-3-3c-1.1 0-2.1.6-2.6 1.5L9 14.5c-.5-.9-1.5-1.5-2.6-1.5c-1.7 0-3 1.3-3 3"/><path d="M22 19c0-1.7-1.3-3-3-3c-1.1 0-2.1.6-2.6 1.5L13.5 14.5c-.5-.9-1.5-1.5-2.6-1.5c-1.7 0-3 1.3-3 3"/><path d="M2 19c0-1.7 1.3-3 3-3c1.1 0 2.1.6 2.6 1.5L10.5 14.5c.5-.9 1.5-1.5 2.6-1.5c1.7 0 3 1.3 3 3"/></svg>
             </div>
-            <div class="empty-desc">Collect at least 5 readings to generate a forecast</div>
+            <div class="empty-desc">Collect at least 3 days of data to generate a forecast</div>
           </div>
         </div>
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
@@ -492,14 +495,13 @@
         </div>
         <div class="map-scroll-wrap" id="map-scroll-wrap">
           <div class="map-wrap" id="map-wrap">
-            <!-- FIX #3: Guard onerror against app not existing -->
             <img 
               src="assets/campus-map.jpg" 
               alt="Campus Map" 
               class="map-image" 
               id="map-img"
               onload="if (window.app && typeof window.app.syncMapPins === 'function') window.app.syncMapPins()"
-              onerror="if(window.app&&app.tryNextMapImage)app.tryNextMapImage(this)"
+              onerror="app.tryNextMapImage(this)"
               data-attempt="0"
             >
             <div class="map-fallback" id="map-fallback">
@@ -561,20 +563,6 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-
-        <!-- FIX #8: Row starts hidden but JS will sync visibility to checkbox state -->
-        <div class="glass-card setting-item" id="firebase-url-row" style="display:none;">
-          <div class="setting-info" style="width:100%;">
-            <h4>Firebase Database URL</h4>
-            <p style="font-size:0.75rem;color:#6b7280;">Paste your Realtime Database URL here</p>
-            <input type="url" id="firebase-url-input" class="cal-input" style="width:100%;margin-top:6px;font-size:0.8rem;" placeholder="https://your-project.firebaseio.com/">
-            <button class="btn-secondary" id="btn-connect-firebase" onclick="app.connectFirebase()" style="margin-top:8px;width:100%;">
-              Connect to Firebase
-            </button>
-            <div id="firebase-status" style="font-size:0.7rem;color:#6b7280;margin-top:4px;">Not connected</div>
-          </div>
-        </div>
-
         <div class="glass-card setting-item">
           <div class="setting-info">
             <h4>SMS Alerts</h4>
@@ -585,7 +573,6 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-
         <div class="glass-card setting-item">
           <div class="setting-info">
             <h4>Outlier Detection</h4>
@@ -596,7 +583,6 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-
         <div class="glass-card setting-item">
           <div class="setting-info">
             <h4>Spike Detection</h4>
@@ -607,7 +593,6 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-
         <div class="glass-card setting-item">
           <div class="setting-info">
             <h4>Demo Mode</h4>
@@ -618,7 +603,6 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-
         <div class="glass-card setting-item">
           <div class="setting-info">
             <h4>Dark Mode</h4>
@@ -716,6 +700,7 @@
 
 </div>
 
+<script src="cloud_config.js"></script>
 <script src="script.js" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
