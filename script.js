@@ -199,6 +199,22 @@ class SchoolHeatApp {
   }
 
   bindSettingsEvents() {
+     // Firebase URL toggle
+document.getElementById('setting-firebase').addEventListener('change', (e) => {
+  const urlRow = document.getElementById('firebase-url-row');
+  urlRow.style.display = e.target.checked ? 'block' : 'none';
+  this.settings.firebaseEnabled = e.target.checked;
+  this.saveSettings();
+});
+
+// Load saved Firebase URL
+const savedUrl = localStorage.getItem('schoolheat_firebase_url');
+if (savedUrl) {
+  document.getElementById('firebase-url-input').value = savedUrl;
+  this.firebaseUrl = savedUrl;
+  document.getElementById('firebase-status').textContent = 'Saved';
+}
+     
     const toggles = ['setting-firebase', 'setting-sms', 'setting-outlier', 'setting-spike', 'setting-demo', 'setting-darkmode'];
     toggles.forEach(id => {
       const el = document.getElementById(id);
