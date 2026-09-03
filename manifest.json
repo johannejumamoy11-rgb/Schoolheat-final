@@ -1,7 +1,7 @@
 {
   "name": "SchoolHeat Ultimate — TUKLAS 2026",
   "short_name": "SchoolHeat",
-  "description": "Real-time heat index monitoring for Mahaplag National High School",
+  "description": "Real-time heat index monitoring",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0a0a14",
