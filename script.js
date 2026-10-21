@@ -51,7 +51,7 @@ const STATUS_LABELS = {
   nodata: 'No Data'
 };
 
-const AUTO_READ_INTERVAL_MS = 10000;
+const AUTO_READ_INTERVAL_MS = 600000;
 
 class SchoolHeatApp {
   constructor() {
