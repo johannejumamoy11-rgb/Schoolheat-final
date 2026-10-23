@@ -24,7 +24,7 @@ messaging.onBackgroundMessage(payload => {
   });
 });
 
-const CACHE_NAME = 'schoolheat-v7';
+const CACHE_NAME = 'schoolheat-v8';
 const ASSETS = [
   './',
   './index.html',
