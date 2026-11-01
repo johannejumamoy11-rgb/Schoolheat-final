@@ -11,13 +11,12 @@ automatically sync between devices.
 
 Offline mode does not provide internet services: Firebase sync and phone push
 alerts need internet. For sensor readings, install the published GitHub Pages
-app and open it online once on each device so its shell is cached. Then connect
-that device to the ESP32's `SchoolHeat` Wi-Fi and use **Auto-Read ESP32**. The
-app connects directly to the ESP32; no laptop bridge or USB data connection is
-needed. Use a current Chrome or Edge browser that supports secure-page access
-to local-network devices, and allow the local-network permission if prompted.
-Each device saves its own readings in its own browser storage; readings are
-not automatically shared between devices.
+app and open it online once so its shell is cached. Wi-Fi sync uses the
+ESP32's `SchoolHeat` network, the local bridge script, and **Auto-Read ESP32**.
+Alternatively, **Sync via Bluetooth** connects from a Web Bluetooth-capable
+desktop browser directly to the ESP32; it does not require joining the ESP32
+Wi-Fi or running the bridge. Both methods import readings into that browser's
+local history. Readings are not automatically shared between devices.
 
 ## ESP32 + DHT22 local Wi-Fi logging
 
@@ -33,9 +32,8 @@ phones while the ESP32 is offline.
    **VCC → ESP32 3V3**, **DATA → GPIO 4**, and **GND → GND**. Do not connect
    the sensor data pin to 5 V.
 2. In `schoolheat-esp32.ino`, set `AP_PASSWORD` to a private Wi-Fi password of
-   at least 8 characters. Do not commit the real password to GitHub. The app
-   uses the password-protected ESP32 access point; no API token or bridge
-   configuration is needed.
+   at least 8 characters. Do not commit the real password to GitHub. The bridge
+   uses the password-protected ESP32 access point; no API token is needed.
 3. In Arduino IDE, select an ESP32 WROOM development board and install
    **DHT sensor library** by Adafruit, **Adafruit Unified Sensor**, and
    **ArduinoJson**. Upload `schoolheat-esp32.ino` at 115200 baud. Open Serial
@@ -59,21 +57,47 @@ Dev Module and Arduino packages installed on this laptop. These editor
 underlines are separate from Arduino IDE compile errors; use **Verify** in
 Arduino IDE to check whether the sketch itself compiles.
 
-### Auto-Read directly from the ESP32
+### Auto-Read through the laptop bridge
 
-1. While online, open the published SchoolHeat GitHub Pages app on each phone
-   or laptop and install it. This caches the app before the device joins the
-   ESP32's no-internet Wi-Fi network.
-2. Power the ESP32 and connect each device to `SchoolHeat` using the private
-   password configured in `AP_PASSWORD`. A "No internet" warning is expected.
-3. Open the installed app, go to **Monitor**, choose the sensor's school
-   location, and tap **Auto-Read ESP32**. Approve local-network access when
-   asked. The first sync sets the ESP32 clock and takes an immediate sample;
-   the ESP32 then continues sampling every five minutes.
-4. Leave Auto-Read running while the device is connected. Each browser stores
-   its own synced readings and keeps its own sync position. The ESP32 retains
-   readings for other team devices; when its 192 KiB log fills, it rotates out
-   the oldest readings to keep collecting.
+1. On the Windows laptop, while online, open the published app once to cache
+   its files. Download or copy `start-local-bridge.ps1` to that laptop.
+2. Power the ESP32, connect the laptop to `SchoolHeat` using the private
+   `AP_PASSWORD`, and run:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\start-local-bridge.ps1
+   ```
+
+3. Keep the PowerShell window open. In the GitHub Pages app, go to **Monitor**,
+   select the sensor location, and click **Auto-Read ESP32**. The first sync
+   sets the ESP32 clock and requests an immediate sample; after that, the ESP32
+   continues sampling every five minutes.
+4. The bridge runs only on localhost and only accepts this project's GitHub
+   Pages origin. Each browser stores its own sync position and readings. The
+   ESP32 keeps a rolling log and rotates out its oldest records when full.
+
+### Sync via Bluetooth without the bridge
+
+1. Upload the updated `schoolheat-esp32/schoolheat-esp32.ino` firmware. It
+   advertises as **SchoolHeat ESP32** while continuing to sample every five
+   minutes and save readings to flash.
+2. Open the HTTPS GitHub Pages app in desktop Edge or Chrome. Go to **Monitor**,
+   choose the sensor location, and click **Sync via Bluetooth**.
+3. Select **SchoolHeat ESP32** in the browser's Bluetooth prompt. Keep the
+   laptop within Bluetooth range while the app imports readings. You do not
+   need to connect the laptop to the ESP32 Wi-Fi.
+4. The app saves imported readings in the current browser's local history and
+   remembers its sync position. The ESP32 continues logging when the laptop is
+   off, provided the ESP32 stays powered; those readings are imported the next
+   time Bluetooth sync completes.
+
+Bluetooth sync requires Web Bluetooth support and a secure app context; use
+the published HTTPS site for the supported workflow. Browser behavior for
+opening `index.html` directly as a file can vary. Bluetooth access is granted
+by the browser and is not protected by the Wi-Fi password; only use it in a
+trusted environment. A device reboot without the app connected can leave
+readings without reliable timestamps because this setup has no real-time
+clock.
 
 There is no RTC module in this setup. Keep the ESP32 powered while the laptop is
 off. If the ESP32 itself loses power, it cannot take readings during that
@@ -83,11 +107,10 @@ ESP32 and is not imported with invented timestamps. Wi-Fi push alerts still
 require the separate Firebase setup below and do not work while the laptop is
 off.
 
-Direct browser-to-ESP32 access requires a browser that permits a secure GitHub
-Pages app to request the ESP32's local HTTP address. Browser support and
-permission prompts vary; if the request is blocked, try the latest Chrome or
-Edge. The ESP32 API is intended only for clients connected to its password-
-protected access point. Do not connect the ESP32 API to a public network.
+The browser cannot directly fetch the ESP32's HTTP API from GitHub Pages HTTPS
+in browsers that block mixed content. Use the local bridge for Wi-Fi sync or
+Bluetooth sync to avoid that HTTP request. Keep the ESP32 API on its
+password-protected access point; do not connect it to a public network.
 
 SchoolHeat can send Danger/Extreme notifications to subscribed browsers over the
 internet. This is **not SMS**: a phone number or SIM is not needed, but the
