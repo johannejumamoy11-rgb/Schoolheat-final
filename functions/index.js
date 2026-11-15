@@ -47,18 +47,34 @@ exports.unregisterPushDevice = onCall(getCallableOptions(), async request => {
 });
 
 function calculateHeatIndex(tempC, humidity) {
-  if (tempC < 26.67) return tempC;
   const fahrenheit = tempC * 9 / 5 + 32;
-  const heatIndexF =
-    -42.379 +
-    2.04901523 * fahrenheit +
-    10.14333127 * humidity -
-    0.22475541 * fahrenheit * humidity -
-    0.00683783 * fahrenheit ** 2 -
-    0.05481717 * humidity ** 2 +
-    0.00122874 * fahrenheit ** 2 * humidity +
-    0.00085282 * fahrenheit * humidity ** 2 -
-    0.00000199 * fahrenheit ** 2 * humidity ** 2;
+  let heatIndexF = 0.5 * (
+    fahrenheit + 61 + (fahrenheit - 68) * 1.2 + humidity * 0.094
+  );
+  heatIndexF = 0.5 * (heatIndexF + fahrenheit);
+
+  if (heatIndexF >= 80) {
+    const fahrenheitSquared = fahrenheit * fahrenheit;
+    const humiditySquared = humidity * humidity;
+    heatIndexF =
+      -42.379 +
+      2.04901523 * fahrenheit +
+      10.14333127 * humidity -
+      0.22475541 * fahrenheit * humidity -
+      0.00683783 * fahrenheitSquared -
+      0.05481717 * humiditySquared +
+      0.00122874 * fahrenheitSquared * humidity +
+      0.00085282 * fahrenheit * humiditySquared -
+      0.00000199 * fahrenheitSquared * humiditySquared;
+
+    if (humidity < 13 && fahrenheit >= 80 && fahrenheit <= 112) {
+      heatIndexF -= ((13 - humidity) / 4) *
+        Math.sqrt((17 - Math.abs(fahrenheit - 95)) / 17);
+    } else if (humidity > 85 && fahrenheit >= 80 && fahrenheit <= 87) {
+      heatIndexF += ((humidity - 85) / 10) * ((87 - fahrenheit) / 5);
+    }
+  }
+
   return Math.max(tempC, (heatIndexF - 32) * 5 / 9);
 }
 
@@ -104,8 +120,9 @@ exports.sendHeatAlert = onCall(getCallableOptions(), async request => {
     if (heatIndex < 33) {
       throw new HttpsError("failed-precondition", "Phone push alerts are sent only for Danger or Extreme heat.");
     }
-    status = heatIndex >= 42 ? "EXTREME" : "DANGER";
-    title = `SchoolHeat ${status} heat warning`;
+    const level = heatIndex >= 42 ? "Hinto" : "Hinga";
+    status = level.toUpperCase();
+    title = `SchoolHeat ${level} heat warning`;
     body = `${location}: ${temp.toFixed(1)}°C, humidity ${humidity.toFixed(1)}%, heat index ${heatIndex.toFixed(1)}°C.`;
   }
 
