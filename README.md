@@ -195,9 +195,11 @@ SMS on this device without clearing recipients or SMS settings. An SMS already
 being sent cannot be cancelled. Queued phone numbers and message details remain
 in this browser's local storage until sent; clearing the browser's site data
 deletes them. The Worker caches successful results for an SMS request ID so a
-lost response does not cause a second send. A failure while Semaphore is
-processing the request can still leave delivery uncertain; check Semaphore's
-message history before manually resending. For a no-modem setup, keep the
+lost response does not cause a second send. Retryable errors keep the message
+queued and show the provider HTTP status and retry delay when available. A
+failure while Semaphore is processing the request can still leave delivery
+uncertain; check Semaphore's message history before manually resending. For a
+no-modem setup, keep the
 laptop on its normal internet connection and sync readings over Bluetooth. If
 using ESP32 Wi-Fi sync, the laptop needs a separate internet connection at the
 same time (for example, wired Ethernet). The ESP32 access point itself does not

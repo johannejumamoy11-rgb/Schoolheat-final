@@ -1398,8 +1398,15 @@ class SchoolHeatApp {
         throw new Error('The SMS Worker returned an invalid response.');
       }
       if (response.status === 429 || response.status >= 500) {
-        this.toast('SMS remains queued; the service will be tried again.', 'warning');
-        this.scheduleSmsRetry((Number(result.retryAfterSeconds) || 300) * 1000);
+        const retryAfterSeconds = Math.max(1, Number(result.retryAfterSeconds) || 300);
+        const errorDetail = typeof result.error === 'string'
+          ? result.error
+          : `The SMS service returned HTTP ${response.status}.`;
+        const providerStatus = Number.isInteger(result.providerStatus)
+          ? ` (provider HTTP ${result.providerStatus})`
+          : '';
+        this.toast(`SMS remains queued: ${errorDetail}${providerStatus} It will retry in about ${retryAfterSeconds} seconds while SchoolHeat is open.`, 'warning');
+        this.scheduleSmsRetry(retryAfterSeconds * 1000);
         return;
       }
       if (!response.ok) {

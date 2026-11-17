@@ -201,7 +201,7 @@ export function createMessage(payload) {
   return `SchoolHeat ${level} warning at ${location.slice(0, 60)}: ${temperature.toFixed(1)}C, RH ${humidity.toFixed(1)}%, heat index ${heatIndex.toFixed(1)}C (reading ${timeLabel}).`;
 }
 
-async function sendSms(env, numbers, message) {
+export async function sendSms(env, numbers, message, fetchImpl = fetch) {
   if (!env.SEMAPHORE_API_KEY) throw new Error("Semaphore is not configured on the SMS Worker.");
   const form = new URLSearchParams({
     apikey: env.SEMAPHORE_API_KEY,
@@ -210,7 +210,7 @@ async function sendSms(env, numbers, message) {
   });
   let response;
   try {
-    response = await fetch("https://api.semaphore.co/api/v4/messages", {
+    response = await fetchImpl("https://api.semaphore.co/api/v4/messages", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: form
@@ -220,7 +220,22 @@ async function sendSms(env, numbers, message) {
   }
 
   if (response.status === 429 || response.status >= 500) {
-    return { status: 503, body: { error: "Semaphore is temporarily unavailable; the alert can be retried." } };
+    const headerRetryAfter = Number(response.headers.get("Retry-After"));
+    const retryAfterSeconds = Math.max(
+      RATE_LIMIT_MS / 1000,
+      Number.isFinite(headerRetryAfter) && headerRetryAfter > 0
+        ? Math.ceil(headerRetryAfter)
+        : 0
+    );
+    console.warn("Semaphore returned a retryable SMS response.", response.status);
+    return {
+      status: 503,
+      body: {
+        error: "Semaphore is temporarily unavailable; the alert can be retried.",
+        providerStatus: response.status,
+        retryAfterSeconds
+      }
+    };
   }
   if (!response.ok) {
     return { status: 422, body: { error: `Semaphore rejected the request (HTTP ${response.status}). Check the API key and account credits.` } };

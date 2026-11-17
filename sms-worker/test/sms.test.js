@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import worker, { createMessage, normalizeNumbers, SmsRateLimiter } from "../src/index.js";
+import worker, { createMessage, normalizeNumbers, sendSms, SmsRateLimiter } from "../src/index.js";
 
 test("normalizes Philippine mobile numbers and removes duplicates", () => {
   assert.deepEqual(
@@ -12,6 +12,25 @@ test("normalizes Philippine mobile numbers and removes duplicates", () => {
 test("rejects invalid recipient lists", () => {
   assert.throws(() => normalizeNumbers([]), /one and five/);
   assert.throws(() => normalizeNumbers(["12345"]), /Philippine mobile/);
+});
+
+test("reports retryable Semaphore status and enforces the five-minute retry limit", async () => {
+  const result = await sendSms(
+    { SEMAPHORE_API_KEY: "test-key" },
+    ["639123456789"],
+    "test message",
+    async () => new Response("temporarily unavailable", {
+      status: 429,
+      headers: { "Retry-After": "42" }
+    })
+  );
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.body, {
+    error: "Semaphore is temporarily unavailable; the alert can be retried.",
+    providerStatus: 429,
+    retryAfterSeconds: 300
+  });
+  assert.equal(JSON.stringify(result).includes("test-key"), false);
 });
 
 test("rejects SMS requests without Firebase Auth and App Check", async () => {
