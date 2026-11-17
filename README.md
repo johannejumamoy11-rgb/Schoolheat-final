@@ -187,19 +187,21 @@ for ESP32 Wi-Fi sync).
 The app's cached offline shell does not make Semaphore available offline:
 Semaphore needs internet to deliver messages. If internet is unavailable, up
 to 20 pending SMS are saved in this browser and retried when the app is online
-again. The browser must remain open for automatic retries; if it closes, the
-queue is retried the next time the app opens online. Queued phone numbers and
-message details remain in this browser's local storage until sent; clearing
-the browser's site data deletes them. In **Settings**, use **Cancel Queued SMS**
-to cancel all pending SMS on this device without clearing recipients or SMS
-settings; an SMS already being sent cannot be cancelled. The Worker caches
-successful results for an SMS request ID so a lost response does not cause a
-second send. A failure while Semaphore is processing the request can still
-leave delivery uncertain; check Semaphore's message history before manually
-resending. For a no-modem setup, keep the laptop on its normal internet
-connection and sync readings over Bluetooth. If using ESP32 Wi-Fi sync, the
-laptop needs a separate internet connection at the same time (for example,
-wired Ethernet). The ESP32 access point itself does not provide internet.
+again. The browser must remain open for automatic retries. If the app is
+reopened with queued alerts, SchoolHeat asks before retrying; choose **Cancel**
+to keep them queued without sending during that session. In **Settings**, use
+**Retry Queued SMS** to resume or **Cancel Queued SMS** to remove all pending
+SMS on this device without clearing recipients or SMS settings. An SMS already
+being sent cannot be cancelled. Queued phone numbers and message details remain
+in this browser's local storage until sent; clearing the browser's site data
+deletes them. The Worker caches successful results for an SMS request ID so a
+lost response does not cause a second send. A failure while Semaphore is
+processing the request can still leave delivery uncertain; check Semaphore's
+message history before manually resending. For a no-modem setup, keep the
+laptop on its normal internet connection and sync readings over Bluetooth. If
+using ESP32 Wi-Fi sync, the laptop needs a separate internet connection at the
+same time (for example, wired Ethernet). The ESP32 access point itself does not
+provide internet.
 
 Semaphore currently lists outbound SMS at PHP 0.56 per text before VAT (about
 PHP 0.63 including 12% VAT), billed per recipient and per message segment.

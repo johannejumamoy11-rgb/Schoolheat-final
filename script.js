@@ -125,6 +125,8 @@ class SchoolHeatApp {
     this.pushMessageUnsubscribe = null;
     this.smsSendInProgress = false;
     this.smsRetryTimer = null;
+    this.smsStartupQueueReview = false;
+    this.smsAutoRetryPaused = false;
     this.init();
   }
 
@@ -146,8 +148,29 @@ class SchoolHeatApp {
     this.setupMapZoomControls();
     this.setupResizeHandler();
     this.setupOfflineAndInstall();
-    window.addEventListener('online', () => this.flushSmsQueue());
-    if (navigator.onLine) setTimeout(() => this.flushSmsQueue(), 1500);
+    try {
+      this.smsStartupQueueReview = this.readPendingSmsQueue().length > 0;
+    } catch (error) {
+      console.error('Could not read the pending SMS queue:', error);
+      this.smsAutoRetryPaused = true;
+      this.toast('Pending SMS could not be read from this device. Check browser storage.', 'error');
+    }
+    window.addEventListener('online', () => {
+      if (this.smsStartupQueueReview) {
+        this.promptPendingSmsRetry();
+      } else if (!this.smsAutoRetryPaused) {
+        this.flushSmsQueue();
+      }
+    });
+    if (navigator.onLine) {
+      setTimeout(() => {
+        if (this.smsStartupQueueReview) {
+          this.promptPendingSmsRetry();
+        } else if (!this.smsAutoRetryPaused) {
+          this.flushSmsQueue();
+        }
+      }, 1500);
+    }
     this.hideLoader();
     if (this.settings.pushAlerts) this.refreshPushRegistration();
   }
@@ -1231,6 +1254,60 @@ class SchoolHeatApp {
     localStorage.setItem(SMS_QUEUE_STORAGE_KEY, JSON.stringify(queue));
   }
 
+  promptPendingSmsRetry() {
+    if (!this.smsStartupQueueReview || this.smsSendInProgress) return;
+
+    let queue;
+    try {
+      queue = this.readPendingSmsQueue();
+    } catch (error) {
+      console.error('Could not read the pending SMS queue:', error);
+      this.smsStartupQueueReview = false;
+      this.smsAutoRetryPaused = true;
+      this.toast('Pending SMS could not be read from this device. Check browser storage.', 'error');
+      return;
+    }
+    this.smsStartupQueueReview = false;
+    if (!queue.length) return;
+
+    const retry = confirm(`There are ${queue.length} queued SMS alerts from an earlier session. Retry them now? Choose Cancel to keep them queued and decide in Settings.`);
+    if (!retry) {
+      this.smsAutoRetryPaused = true;
+      this.toast('Queued SMS alerts were kept on this device and will not retry until you choose Retry Queued SMS.', 'warning');
+      return;
+    }
+    this.smsAutoRetryPaused = false;
+    this.flushSmsQueue();
+  }
+
+  retryPendingSmsQueue() {
+    if (this.smsSendInProgress) {
+      this.toast('An SMS attempt is already in progress. Wait for its result before retrying.', 'warning');
+      return;
+    }
+
+    let queue;
+    try {
+      queue = this.readPendingSmsQueue();
+    } catch (error) {
+      console.error('Could not read the pending SMS queue:', error);
+      this.toast('Pending SMS could not be read from this device. Check browser storage.', 'error');
+      return;
+    }
+    if (!queue.length) {
+      this.toast('There are no queued SMS alerts to retry.', 'warning');
+      return;
+    }
+    if (!navigator.onLine) {
+      this.toast('SMS alerts are still queued. Reconnect to the internet before retrying.', 'warning');
+      return;
+    }
+
+    this.smsStartupQueueReview = false;
+    this.smsAutoRetryPaused = false;
+    this.flushSmsQueue();
+  }
+
   cancelPendingSmsQueue() {
     if (this.smsSendInProgress) {
       this.toast('An SMS attempt is already in progress and cannot be cancelled. Check Semaphore message history before trying again.', 'warning');
@@ -1267,6 +1344,8 @@ class SchoolHeatApp {
     }
     if (this.smsRetryTimer) clearTimeout(this.smsRetryTimer);
     this.smsRetryTimer = null;
+    this.smsStartupQueueReview = false;
+    this.smsAutoRetryPaused = false;
     this.toast(`${alertLabel} cancelled. Saved recipient numbers and SMS settings were kept.`, 'success');
   }
 
