@@ -1231,6 +1231,45 @@ class SchoolHeatApp {
     localStorage.setItem(SMS_QUEUE_STORAGE_KEY, JSON.stringify(queue));
   }
 
+  cancelPendingSmsQueue() {
+    if (this.smsSendInProgress) {
+      this.toast('An SMS attempt is already in progress and cannot be cancelled. Check Semaphore message history before trying again.', 'warning');
+      return;
+    }
+
+    let queue;
+    try {
+      queue = this.readPendingSmsQueue();
+    } catch (error) {
+      console.error('Could not read the pending SMS queue:', error);
+      this.toast('Pending SMS could not be read from this device. Check browser storage.', 'error');
+      return;
+    }
+    if (!queue.length) {
+      this.toast('There are no queued SMS alerts to cancel.', 'warning');
+      return;
+    }
+
+    const alertCount = queue.length;
+    const alertLabel = `${alertCount} queued SMS alert${alertCount === 1 ? '' : 's'}`;
+    if (!confirm(`Cancel ${alertLabel} on this device? Saved recipient numbers and SMS settings will stay unchanged.`)) return;
+    if (this.smsSendInProgress) {
+      this.toast('An SMS attempt started before the queue could be cancelled. Check Semaphore message history before trying again.', 'warning');
+      return;
+    }
+
+    try {
+      this.savePendingSmsQueue([]);
+    } catch (error) {
+      console.error('Could not cancel pending SMS alerts:', error);
+      this.toast('Queued SMS alerts were not cancelled because browser storage could not be updated.', 'error');
+      return;
+    }
+    if (this.smsRetryTimer) clearTimeout(this.smsRetryTimer);
+    this.smsRetryTimer = null;
+    this.toast(`${alertLabel} cancelled. Saved recipient numbers and SMS settings were kept.`, 'success');
+  }
+
   scheduleSmsRetry(delayMs = SMS_RETRY_DELAY_MS) {
     if (this.smsRetryTimer) clearTimeout(this.smsRetryTimer);
     this.smsRetryTimer = setTimeout(() => {
