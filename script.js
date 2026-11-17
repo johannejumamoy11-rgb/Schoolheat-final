@@ -420,7 +420,8 @@ class SchoolHeatApp {
       this.deleteReading(Number(button.dataset.deleteReadingIndex));
     });
     document.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (e.target instanceof HTMLElement &&
+          (e.target.matches('input, select, textarea') || e.target.isContentEditable)) return;
       if (e.key >= '1' && e.key <= '6') {
         const tabs = ['dashboard','monitor','history','forecast','map','settings'];
         this.switchTab(tabs[parseInt(e.key) - 1]);
