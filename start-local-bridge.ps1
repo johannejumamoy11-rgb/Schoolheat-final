@@ -3,8 +3,8 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Net.Http
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add('http://localhost:8765/')
-$client = [System.Net.Http.HttpClient]::new()
-$client.Timeout = [TimeSpan]::FromSeconds(5)
+$espClient = [System.Net.Http.HttpClient]::new()
+$espClient.Timeout = [TimeSpan]::FromSeconds(5)
 $esp32BaseUrl = 'http://192.168.4.1'
 $allowedOrigin = 'https://johannejumamoy11-rgb.github.io'
 $routes = @{
@@ -41,9 +41,9 @@ try {
     exit 1
 }
 
-Write-Host 'SchoolHeat local bridge is running at http://localhost:8765'
-Write-Host 'Connect this device to the ESP32 SchoolHeat Wi-Fi.'
-Write-Host 'Keep this PowerShell window open while Auto-Read is running.'
+Write-Host 'SchoolHeat ESP32 bridge is running at http://localhost:8765'
+Write-Host 'This bridge is only for ESP32 Wi-Fi sync; Semaphore SMS uses the hosted Worker.'
+Write-Host 'Keep this PowerShell window open while Auto-Read ESP32 is active.'
 Write-Host 'Press Ctrl+C to stop the bridge.'
 
 try {
@@ -85,13 +85,18 @@ try {
             $targetUrl += $request.Url.Query
         }
 
+        $proxyRequest = $null
+        $proxyResponse = $null
         try {
             $method = [System.Net.Http.HttpMethod]::new($request.HttpMethod)
             $proxyRequest = [System.Net.Http.HttpRequestMessage]::new($method, $targetUrl)
             if ($request.HttpMethod -eq 'POST') {
                 $reader = [System.IO.StreamReader]::new($request.InputStream, $request.ContentEncoding)
-                $body = $reader.ReadToEnd()
-                $reader.Dispose()
+                try {
+                    $body = $reader.ReadToEnd()
+                } finally {
+                    $reader.Dispose()
+                }
                 $proxyRequest.Content = [System.Net.Http.StringContent]::new(
                     $body,
                     [System.Text.Encoding]::UTF8,
@@ -99,17 +104,19 @@ try {
                 )
             }
 
-            $proxyResponse = $client.SendAsync($proxyRequest).GetAwaiter().GetResult()
+            $proxyResponse = $espClient.SendAsync($proxyRequest).GetAwaiter().GetResult()
             $responseBody = $proxyResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
             Send-Response $context ([int]$proxyResponse.StatusCode) $responseBody
-            $proxyResponse.Dispose()
-            $proxyRequest.Dispose()
         } catch {
-            Send-Response $context 502 "{`"error`":`"Could not reach the ESP32 at 192.168.4.1: $($_.Exception.Message)`"}"
+            Write-Warning "ESP32 bridge request failed: $($_.Exception.Message)"
+            Send-Response $context 502 '{"error":"Could not reach the ESP32 at 192.168.4.1."}'
+        } finally {
+            if ($proxyResponse) { $proxyResponse.Dispose() }
+            if ($proxyRequest) { $proxyRequest.Dispose() }
         }
     }
 } finally {
     $listener.Stop()
     $listener.Close()
-    $client.Dispose()
+    $espClient.Dispose()
 }

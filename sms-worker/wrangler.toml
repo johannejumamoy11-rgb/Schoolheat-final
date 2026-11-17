@@ -1,0 +1,11 @@
+name = "schoolheat-sms"
+main = "src/index.js"
+compatibility_date = "2025-03-01"
+
+[[durable_objects.bindings]]
+name = "SMS_RATE_LIMITER"
+class_name = "SmsRateLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SmsRateLimiter"]

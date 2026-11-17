@@ -11,6 +11,8 @@ window.SCHOOLHEAT_CLOUD = {
   "messagingSenderId": "960776018094",
   "appId": "1:960776018094:web:2d61dc050347340c86f53f",
   "appCheckSiteKey": "6LdYR_ktAAAAANlU6kLjKksSRLc-WyNV4Wi4y5KV",
+  // Public Cloudflare Worker URL; never put the Semaphore API key here.
+  "smsWorkerUrl": "https://schoolheat-sms.johannejumamoy11.workers.dev",
   "vapidKey": "BNayGZq6j4floaFQc4W-x96BAueV9fqpFbIYwNnUGugx_1z0N6L1kQ9_7DUGk8ZOp5R8Agz18TEtdyFgmx4uR8g",
   "path": "schoolheat"
 };

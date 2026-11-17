@@ -77,10 +77,13 @@ const FORECAST_MODEL_LABELS = {
 const AUTO_READ_INTERVAL_MS = 300000;
 const STALE_READING_AFTER_MS = 15 * 60 * 1000;
 const ESP32_BRIDGE_BASE = 'http://localhost:8765';
+const SMS_QUEUE_STORAGE_KEY = 'sh_pending_sms';
+const SMS_QUEUE_MAX_ITEMS = 20;
+const SMS_RETRY_DELAY_MS = 5 * 60 * 1000;
 
 class SchoolHeatApp {
   constructor() {
-    const defaultSettings = { firebase: true, browserNotifications: false, pushAlerts: false, outlier: true, spike: true, demoMode: false, tempOffset: 0, humidityOffset: 0, darkMode: false };
+    const defaultSettings = { firebase: true, browserNotifications: false, pushAlerts: false, smsAlerts: false, smsNumbers: '', outlier: true, spike: true, demoMode: false, tempOffset: 0, humidityOffset: 0, darkMode: false };
     try {
       const storedReadings = JSON.parse(localStorage.getItem('sh_readings') || '[]');
       this.readings = Array.isArray(storedReadings) ? storedReadings : [];
@@ -116,8 +119,12 @@ class SchoolHeatApp {
     this.bluetoothRequestSequence = 0;
     this.lastSensorValues = {};
     this.deferredInstallPrompt = null;
+    this.alertBackendPromise = null;
+    this.alertFunctionsPromise = null;
     this.pushBackendPromise = null;
     this.pushMessageUnsubscribe = null;
+    this.smsSendInProgress = false;
+    this.smsRetryTimer = null;
     this.init();
   }
 
@@ -139,6 +146,8 @@ class SchoolHeatApp {
     this.setupMapZoomControls();
     this.setupResizeHandler();
     this.setupOfflineAndInstall();
+    window.addEventListener('online', () => this.flushSmsQueue());
+    if (navigator.onLine) setTimeout(() => this.flushSmsQueue(), 1500);
     this.hideLoader();
     if (this.settings.pushAlerts) this.refreshPushRegistration();
   }
@@ -791,7 +800,7 @@ class SchoolHeatApp {
   }
 
   bindSettingsEvents() {
-    const toggles = ['setting-firebase', 'setting-browser-notifications', 'setting-push-alerts', 'setting-outlier', 'setting-spike', 'setting-demo', 'setting-darkmode'];
+    const toggles = ['setting-firebase', 'setting-browser-notifications', 'setting-push-alerts', 'setting-sms-alerts', 'setting-outlier', 'setting-spike', 'setting-demo', 'setting-darkmode'];
     toggles.forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('change', () => {
@@ -814,8 +823,10 @@ class SchoolHeatApp {
     });
     const calTemp = document.getElementById('cal-temp');
     const calHum = document.getElementById('cal-humidity');
+    const smsNumbers = document.getElementById('setting-sms-numbers');
     if (calTemp) calTemp.addEventListener('change', () => this.saveSettings());
     if (calHum) calHum.addEventListener('change', () => this.saveSettings());
+    if (smsNumbers) smsNumbers.addEventListener('change', () => this.saveSettings());
   }
 
   calculateHeatIndex(T, H) {
@@ -997,6 +1008,7 @@ class SchoolHeatApp {
       this.toast(message, 'error');
       this.showBrowserNotification(message, `${STATUS_LABELS[latest.status]} heat warning`);
       if (this.settings.pushAlerts) this.sendHeatPushAlert(latest);
+      if (this.settings.smsAlerts) this.sendHeatSmsAlert(latest);
     }
     this.lastObservedReadingId = latest.id;
   }
@@ -1047,27 +1059,25 @@ class SchoolHeatApp {
     }
   }
 
-  async getPushService() {
-    if (!this.pushBackendPromise) {
-      this.pushBackendPromise = (async () => {
+  async getAlertService() {
+    if (!this.alertBackendPromise) {
+      this.alertBackendPromise = (async () => {
         const config = window.SCHOOLHEAT_CLOUD;
         if (!config?.enabled || !config.apiKey || !config.projectId) {
-          return { error: 'Firebase push is not configured.' };
+          return { error: 'Firebase authentication is not configured in cloud_config.js.' };
         }
-        if (!config.appCheckSiteKey || !config.vapidKey) {
-          return { error: 'Push setup is incomplete: add the App Check site key and FCM Web Push certificate key to cloud_config.js.' };
+        if (!config.appCheckSiteKey) {
+          return { error: 'Firebase App Check is not configured in cloud_config.js.' };
         }
-        if (!window.isSecureContext || !('serviceWorker' in navigator)) {
-          return { error: 'Phone push requires SchoolHeat to be hosted over HTTPS and supported by this browser.' };
+        if (!window.isSecureContext) {
+          return { error: 'SMS alerts require SchoolHeat to be hosted over HTTPS.' };
         }
 
         try {
-          const [appSdk, authSdk, appCheckSdk, functionsSdk, messagingSdk] = await Promise.all([
+          const [appSdk, authSdk, appCheckSdk] = await Promise.all([
             import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js'),
-            import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app-check.js'),
-            import('https://www.gstatic.com/firebasejs/13.0.0/firebase-functions.js'),
-            import('https://www.gstatic.com/firebasejs/13.0.0/firebase-messaging.js')
+            import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app-check.js')
           ]);
           const app = appSdk.getApps().length ? appSdk.getApp() : appSdk.initializeApp({
             apiKey: config.apiKey,
@@ -1078,24 +1088,74 @@ class SchoolHeatApp {
             messagingSenderId: config.messagingSenderId,
             appId: config.appId
           });
-          appCheckSdk.initializeAppCheck(app, {
+          const appCheck = appCheckSdk.initializeAppCheck(app, {
             provider: new appCheckSdk.ReCaptchaEnterpriseProvider(config.appCheckSiteKey),
             isTokenAutoRefreshEnabled: true
           });
           const auth = authSdk.getAuth(app);
           if (!auth.currentUser) await authSdk.signInAnonymously(auth);
-          const functions = functionsSdk.getFunctions(app, 'asia-southeast1');
-          if (!(await messagingSdk.isSupported())) {
-            return { error: 'This browser does not support Firebase web push notifications.' };
-          }
-          const messaging = messagingSdk.getMessaging(app);
+          return {
+            app,
+            auth,
+            appCheck,
+            appCheckSdk,
+            authSdk,
+          };
+        } catch (error) {
+          console.error('Could not initialize Firebase alerts:', error);
+          return { error: 'Firebase Auth or App Check is unavailable. Check its configuration in Firebase Console.' };
+        }
+      })();
+    }
+    return this.alertBackendPromise;
+  }
+
+  async getAlertFunctions() {
+    if (!this.alertFunctionsPromise) {
+      this.alertFunctionsPromise = (async () => {
+        const service = await this.getAlertService();
+        if (service.error) return service;
+        try {
+          const functionsSdk = await import('https://www.gstatic.com/firebasejs/13.0.0/firebase-functions.js');
+          const functions = functionsSdk.getFunctions(service.app, 'asia-southeast1');
           const callable = name => functionsSdk.httpsCallable(functions, name);
           return {
-            messaging,
-            messagingSdk,
+            ...service,
             register: callable('registerPushDevice'),
             unregister: callable('unregisterPushDevice'),
             send: callable('sendHeatAlert')
+          };
+        } catch (error) {
+          console.error('Could not initialize Firebase Cloud Functions:', error);
+          return { error: 'Firebase Cloud Functions are unavailable. Check the push backend deployment.' };
+        }
+      })();
+    }
+    return this.alertFunctionsPromise;
+  }
+
+  async getPushService() {
+    if (!this.pushBackendPromise) {
+      this.pushBackendPromise = (async () => {
+        const config = window.SCHOOLHEAT_CLOUD;
+        if (!config?.vapidKey) {
+          return { error: 'Push setup is incomplete: add the FCM Web Push certificate key to cloud_config.js.' };
+        }
+        if (!window.isSecureContext || !('serviceWorker' in navigator)) {
+          return { error: 'Phone push requires SchoolHeat to be hosted over HTTPS and supported by this browser.' };
+        }
+
+        const service = await this.getAlertFunctions();
+        if (service.error) return service;
+        try {
+          const messagingSdk = await import('https://www.gstatic.com/firebasejs/13.0.0/firebase-messaging.js');
+          if (!(await messagingSdk.isSupported())) {
+            return { error: 'This browser does not support Firebase web push notifications.' };
+          }
+          return {
+            ...service,
+            messaging: messagingSdk.getMessaging(service.app),
+            messagingSdk
           };
         } catch (error) {
           console.error('Could not initialize phone push:', error);
@@ -1104,6 +1164,150 @@ class SchoolHeatApp {
       })();
     }
     return this.pushBackendPromise;
+  }
+
+  async sendHeatSmsAlert(reading, test = false) {
+    if (!this.settings.smsAlerts && !test) return;
+    const config = window.SCHOOLHEAT_CLOUD;
+    if (!config?.smsWorkerUrl) {
+      this.toast('SMS is not configured: add the Cloudflare Worker URL to cloud_config.js.', 'error');
+      return;
+    }
+
+    const numbers = String(this.settings.smsNumbers || '')
+      .split(/[,\n;]+/)
+      .map(number => number.trim())
+      .filter(Boolean);
+    if (!numbers.length) {
+      this.toast('SMS not sent: add at least one recipient number in Settings.', 'warning');
+      return;
+    }
+
+    let queue;
+    try {
+      queue = this.readPendingSmsQueue();
+      if (queue.length >= SMS_QUEUE_MAX_ITEMS) {
+        this.toast('SMS was not queued: the 20-message offline queue is full. Reconnect to the internet and let it send first.', 'error');
+        return;
+      }
+      queue.push({
+        id: window.crypto?.randomUUID?.() || `sms-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        payload: {
+          test,
+          numbers,
+          location: reading?.location || '',
+          temperature: reading?.temperature,
+          humidity: reading?.humidity,
+          timestamp: reading?.timestamp || ''
+        },
+        queuedAt: Date.now()
+      });
+      this.savePendingSmsQueue(queue);
+    } catch (error) {
+      console.error('Could not save the pending SMS:', error);
+      this.toast('SMS was not sent: this device could not save the pending message.', 'error');
+      return;
+    }
+
+    if (!navigator.onLine) {
+      this.toast(`SMS queued on this device (position ${queue.length}); it will send when internet returns.`, 'warning');
+      return;
+    }
+    await this.flushSmsQueue();
+  }
+
+  readPendingSmsQueue() {
+    const queue = JSON.parse(localStorage.getItem(SMS_QUEUE_STORAGE_KEY) || '[]');
+    if (!Array.isArray(queue) || queue.some(item =>
+      !item || typeof item.id !== 'string' || !item.payload || !Array.isArray(item.payload.numbers)
+    )) {
+      throw new Error('The saved SMS queue is invalid.');
+    }
+    return queue;
+  }
+
+  savePendingSmsQueue(queue) {
+    localStorage.setItem(SMS_QUEUE_STORAGE_KEY, JSON.stringify(queue));
+  }
+
+  scheduleSmsRetry(delayMs = SMS_RETRY_DELAY_MS) {
+    if (this.smsRetryTimer) clearTimeout(this.smsRetryTimer);
+    this.smsRetryTimer = setTimeout(() => {
+      this.smsRetryTimer = null;
+      this.flushSmsQueue();
+    }, Math.max(1000, delayMs));
+  }
+
+  async flushSmsQueue() {
+    if (this.smsSendInProgress || !navigator.onLine) return;
+    let queue;
+    try {
+      queue = this.readPendingSmsQueue();
+    } catch (error) {
+      console.error('Could not read the pending SMS queue:', error);
+      this.toast('Pending SMS could not be read from this device. Check browser storage.', 'error');
+      return;
+    }
+    if (!queue.length) return;
+
+    this.smsSendInProgress = true;
+    try {
+      const config = window.SCHOOLHEAT_CLOUD;
+      if (!config?.smsWorkerUrl) throw new Error('The Cloudflare SMS Worker URL is not configured.');
+      const service = await this.getAlertService();
+      if (service.error) throw new Error(service.error);
+      if (!service.auth.currentUser) await service.authSdk.signInAnonymously(service.auth);
+      const [idToken, appCheckToken] = await Promise.all([
+        service.auth.currentUser.getIdToken(),
+        service.appCheckSdk.getToken(service.appCheck, false)
+      ]);
+      const item = queue[0];
+      const response = await fetch(config.smsWorkerUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': item.id,
+          'X-Firebase-AppCheck': appCheckToken.token
+        },
+        body: JSON.stringify(item.payload)
+      });
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error('The SMS Worker returned an invalid response.');
+      }
+      if (response.status === 429 || response.status >= 500) {
+        this.toast('SMS remains queued; the service will be tried again.', 'warning');
+        this.scheduleSmsRetry((Number(result.retryAfterSeconds) || 300) * 1000);
+        return;
+      }
+      if (!response.ok) {
+        queue.shift();
+        this.savePendingSmsQueue(queue);
+        this.toast(`SMS was not accepted: ${result.error || `request failed (${response.status})`}`, 'error');
+        if (queue.length) this.scheduleSmsRetry();
+        return;
+      }
+
+      queue.shift();
+      this.savePendingSmsQueue(queue);
+      const sent = Number(result.sent) || 0;
+      const failed = Number(result.failed) || 0;
+      if (sent) {
+        this.toast(`Semaphore accepted SMS for ${sent} recipient${sent === 1 ? '' : 's'}${failed ? `; ${failed} failed` : ''}. Check Semaphore for delivery status.`, failed ? 'warning' : 'success');
+      } else {
+        this.toast('SMS was not accepted by Semaphore.', 'warning');
+      }
+      if (queue.length) this.scheduleSmsRetry();
+    } catch (error) {
+      console.error('SMS delivery attempt failed:', error);
+      this.toast('SMS remains queued on this device and will be retried when the service is available.', 'warning');
+      this.scheduleSmsRetry();
+    } finally {
+      this.smsSendInProgress = false;
+    }
   }
 
   async setPushAlerts(enabled) {
@@ -3336,6 +3540,8 @@ class SchoolHeatApp {
     const fb = document.getElementById('setting-firebase');
     const browserNotifications = document.getElementById('setting-browser-notifications');
     const pushAlerts = document.getElementById('setting-push-alerts');
+    const smsAlerts = document.getElementById('setting-sms-alerts');
+    const smsNumbers = document.getElementById('setting-sms-numbers');
     const out = document.getElementById('setting-outlier');
     const spk = document.getElementById('setting-spike');
     const demo = document.getElementById('setting-demo');
@@ -3345,6 +3551,8 @@ class SchoolHeatApp {
     if (fb) fb.checked = this.settings.firebase;
     if (browserNotifications) browserNotifications.checked = this.settings.browserNotifications;
     if (pushAlerts) pushAlerts.checked = this.settings.pushAlerts;
+    if (smsAlerts) smsAlerts.checked = this.settings.smsAlerts;
+    if (smsNumbers) smsNumbers.value = typeof this.settings.smsNumbers === 'string' ? this.settings.smsNumbers : '';
     if (out) out.checked = this.settings.outlier;
     if (spk) spk.checked = this.settings.spike;
     if (demo) demo.checked = this.settings.demoMode;
@@ -3359,6 +3567,8 @@ class SchoolHeatApp {
       firebase: document.getElementById('setting-firebase')?.checked ?? true,
       browserNotifications: document.getElementById('setting-browser-notifications')?.checked ?? false,
       pushAlerts: document.getElementById('setting-push-alerts')?.checked ?? false,
+      smsAlerts: document.getElementById('setting-sms-alerts')?.checked ?? false,
+      smsNumbers: document.getElementById('setting-sms-numbers')?.value ?? '',
       outlier: document.getElementById('setting-outlier')?.checked ?? true,
       spike: document.getElementById('setting-spike')?.checked ?? true,
       demoMode: document.getElementById('setting-demo')?.checked ?? false,
@@ -3641,6 +3851,10 @@ class SchoolHeatApp {
 
   testPushAlert() {
     this.sendHeatPushAlert(null, true);
+  }
+
+  testSmsAlert() {
+    this.sendHeatSmsAlert(null, true);
   }
 
   generateForecastData() {
