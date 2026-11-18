@@ -1,4 +1,8 @@
-const ALLOWED_ORIGIN = "https://johannejumamoy11-rgb.github.io";
+const ALLOWED_ORIGINS = [
+  "https://johannejumamoy11-rgb.github.io",
+  "https://schoolheat-final.web.app",
+  "https://schoolheat-final.firebaseapp.com"
+];
 const FIREBASE_PROJECT_ID = "schoolheat-final";
 const FIREBASE_PROJECT_NUMBER = "960776018094";
 const FIREBASE_APP_ID = "1:960776018094:web:2d61dc050347340c86f53f";
@@ -12,8 +16,8 @@ const jwksCache = new Map();
 
 function corsHeaders(origin) {
   const headers = { "Vary": "Origin", "Cache-Control": "no-store" };
-  if (origin === ALLOWED_ORIGIN) {
-    headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN;
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
     headers["Access-Control-Allow-Methods"] = "POST, OPTIONS";
     headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key, X-Firebase-AppCheck";
     headers["Access-Control-Max-Age"] = "600";
@@ -202,21 +206,34 @@ export function createMessage(payload) {
 }
 
 export async function sendSms(env, numbers, message, fetchImpl = fetch) {
-  if (!env.SEMAPHORE_API_KEY) throw new Error("Semaphore is not configured on the SMS Worker.");
-  const form = new URLSearchParams({
-    apikey: env.SEMAPHORE_API_KEY,
-    number: numbers.join(","),
-    message
-  });
+  if (!env.INFOBIP_API_KEY || !env.INFOBIP_BASE_URL) {
+    throw new Error("Infobip is not configured on the SMS Worker.");
+  }
+  const baseUrl = env.INFOBIP_BASE_URL.replace(/\/$/, "");
+  const endpoint = baseUrl.includes("/sms/")
+    ? baseUrl
+    : `${baseUrl}/sms/2/text/advanced`;
+  const sender = env.INFOBIP_SENDER || "SchoolHeat";
+  const body = {
+    messages: [{
+      from: sender,
+      destinations: numbers.map(number => ({ to: `+${number}` })),
+      text: message
+    }]
+  };
   let response;
   try {
-    response = await fetchImpl("https://api.semaphore.co/api/v4/messages", {
+    response = await fetchImpl(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: form
+      headers: {
+        "Authorization": `App ${env.INFOBIP_API_KEY}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(body)
     });
   } catch {
-    return { status: 503, body: { error: "Could not reach Semaphore; the alert can be retried." } };
+    return { status: 503, body: { error: "Could not reach Infobip; the alert can be retried." } };
   }
 
   if (response.status === 429 || response.status >= 500) {
@@ -227,33 +244,33 @@ export async function sendSms(env, numbers, message, fetchImpl = fetch) {
         ? Math.ceil(headerRetryAfter)
         : 0
     );
-    console.warn("Semaphore returned a retryable SMS response.", response.status);
+    console.warn("Infobip returned a retryable SMS response.", response.status);
     return {
       status: 503,
       body: {
-        error: "Semaphore is temporarily unavailable; the alert can be retried.",
+        error: "Infobip is temporarily unavailable; the alert can be retried.",
         providerStatus: response.status,
         retryAfterSeconds
       }
     };
   }
   if (!response.ok) {
-    return { status: 422, body: { error: `Semaphore rejected the request (HTTP ${response.status}). Check the API key and account credits.` } };
+    return { status: 422, body: { error: `Infobip rejected the request (HTTP ${response.status}). Check the API key, sender, balance, and recipient numbers.` } };
   }
 
-  let records;
+  let data;
   try {
-    const data = await response.json();
-    records = Array.isArray(data) ? data : [data];
+    data = await response.json();
   } catch {
-    return { status: 409, body: { error: "Semaphore returned an unreadable response. Check your message history before retrying." } };
+    return { status: 409, body: { error: "Infobip returned an unreadable response. Check your message history before retrying." } };
   }
-  const accepted = records.filter(record =>
-    typeof record?.status === "string" &&
-    ["queued", "pending", "sent"].includes(record.status.toLowerCase())
-  ).length;
+  const records = Array.isArray(data?.messages) ? data.messages : [];
+  const accepted = records.filter(record => {
+    const status = record?.status?.groupName?.toLowerCase();
+    return ["pending", "accepted", "sent", "delivered"].includes(status);
+  }).length;
   if (accepted === 0) {
-    return { status: 422, body: { error: "Semaphore did not accept the messages. Check your sender name, account credits, and recipient numbers." } };
+    return { status: 422, body: { error: "Infobip did not accept the messages. Check the sender, balance, and recipient numbers." } };
   }
   return {
     status: 200,
@@ -263,7 +280,7 @@ export async function sendSms(env, numbers, message, fetchImpl = fetch) {
 
 async function handleSms(request, env) {
   const origin = request.headers.get("Origin");
-  if (origin !== ALLOWED_ORIGIN) return jsonResponse(origin, 403, { error: "This origin is not allowed." });
+  if (!ALLOWED_ORIGINS.includes(origin)) return jsonResponse(origin, 403, { error: "This origin is not allowed." });
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
   if (request.method !== "POST") return jsonResponse(origin, 405, { error: "Method not allowed." });
   if (Number(request.headers.get("Content-Length")) > MAX_BODY_BYTES) {
@@ -300,8 +317,8 @@ async function handleSms(request, env) {
     return jsonResponse(origin, 400, { error: error.message });
   }
 
-  if (!env.SEMAPHORE_API_KEY) {
-    return jsonResponse(origin, 503, { error: "Semaphore API key is not configured in the Cloudflare Worker." });
+  if (!env.INFOBIP_API_KEY || !env.INFOBIP_BASE_URL) {
+    return jsonResponse(origin, 503, { error: "Infobip is not configured in the Cloudflare Worker." });
   }
 
   const limiterId = env.SMS_RATE_LIMITER.idFromName(userId);
