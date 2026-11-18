@@ -882,6 +882,7 @@ html[data-theme="dark"] .ambient-orb {
   color: var(--danger);
   border: 1px solid rgba(239,68,68,0.18);
 }
+#setting-sms-cancel-queue[hidden] { display: none; }
 .btn-danger:hover {
   background: rgba(239,68,68,0.15);
   transform: translateY(-1px);

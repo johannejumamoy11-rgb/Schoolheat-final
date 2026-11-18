@@ -701,7 +701,7 @@
           </button>
           <button class="btn-secondary" style="width: 100%; margin-top: 10px;" onclick="app.testSmsAlert()">Send Test SMS (may queue and use credits)</button>
           <button class="btn-secondary" type="button" style="width: 100%; margin-top: 8px;" onclick="app.retryPendingSmsQueue()">Retry Queued SMS</button>
-          <button class="btn-danger" type="button" style="width: 100%; margin-top: 8px;" onclick="app.cancelPendingSmsQueue()">Cancel Queued SMS</button>
+          <button id="setting-sms-cancel-queue" class="btn-danger" type="button" style="width: 100%; margin-top: 8px;" onclick="app.cancelPendingSmsQueue()" hidden>Cancel Queued SMS</button>
           <button class="btn-text" style="width: 100%; margin-top: 8px;" onclick="app.testBrowserNotification()">Test Browser Notification</button>
         </div>
       </div>

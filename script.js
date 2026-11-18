@@ -149,12 +149,25 @@ class SchoolHeatApp {
     this.setupResizeHandler();
     this.setupOfflineAndInstall();
     try {
-      this.smsStartupQueueReview = this.readPendingSmsQueue().length > 0;
+      const queue = this.readPendingSmsQueue();
+      this.smsStartupQueueReview = queue.length > 0;
+      this.updateSmsQueueCancelButton(queue.length);
     } catch (error) {
       console.error('Could not read the pending SMS queue:', error);
       this.smsAutoRetryPaused = true;
+      this.updateSmsQueueCancelButton(0);
       this.toast('Pending SMS could not be read from this device. Check browser storage.', 'error');
     }
+    window.addEventListener('storage', event => {
+      if (event.key !== SMS_QUEUE_STORAGE_KEY) return;
+      try {
+        this.updateSmsQueueCancelButton(this.readPendingSmsQueue().length);
+      } catch (error) {
+        console.error('Could not read the pending SMS queue:', error);
+        this.updateSmsQueueCancelButton(0);
+        this.toast('Pending SMS could not be read from this device. Check browser storage.', 'error');
+      }
+    });
     window.addEventListener('online', () => {
       if (this.smsStartupQueueReview) {
         this.promptPendingSmsRetry();
@@ -1252,6 +1265,12 @@ class SchoolHeatApp {
 
   savePendingSmsQueue(queue) {
     localStorage.setItem(SMS_QUEUE_STORAGE_KEY, JSON.stringify(queue));
+    this.updateSmsQueueCancelButton(queue.length);
+  }
+
+  updateSmsQueueCancelButton(queueLength) {
+    const button = document.getElementById('setting-sms-cancel-queue');
+    if (button) button.hidden = queueLength === 0;
   }
 
   promptPendingSmsRetry() {
