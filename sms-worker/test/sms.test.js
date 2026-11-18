@@ -14,9 +14,9 @@ test("rejects invalid recipient lists", () => {
   assert.throws(() => normalizeNumbers(["12345"]), /Philippine mobile/);
 });
 
-test("reports retryable Semaphore status and enforces the five-minute retry limit", async () => {
+test("reports retryable Infobip status and enforces the five-minute retry limit", async () => {
   const result = await sendSms(
-    { SEMAPHORE_API_KEY: "test-key" },
+    { INFOBIP_API_KEY: "test-key", INFOBIP_BASE_URL: "https://example.api.infobip.com" },
     ["639123456789"],
     "test message",
     async () => new Response("temporarily unavailable", {
@@ -26,12 +26,45 @@ test("reports retryable Semaphore status and enforces the five-minute retry limi
   );
   assert.equal(result.status, 503);
   assert.deepEqual(result.body, {
-    error: "Semaphore is temporarily unavailable; the alert can be retried.",
+    error: "Infobip is temporarily unavailable; the alert can be retried.",
     providerStatus: 429,
     retryAfterSeconds: 300
   });
   assert.equal(JSON.stringify(result).includes("test-key"), false);
 });
+
+test("sends SMS through Infobip with a single advanced-message request", async () => {
+  let captured;
+  const result = await sendSms(
+    {
+      INFOBIP_API_KEY: "test-key",
+      INFOBIP_BASE_URL: "https://example.api.infobip.com",
+      INFOBIP_SENDER: "SchoolHeat"
+    },
+    ["639123456789", "639987654321"],
+    "test message",
+    async (url, options) => {
+      captured = { url, options };
+      return new Response(JSON.stringify({
+        messages: [
+          { status: { groupName: "PENDING" } },
+          { status: { groupName: "PENDING" } }
+        ]
+      }), { status: 200 });
+    }
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { sent: 2, failed: 0, queued: false });
+  assert.equal(captured.url, "https://example.api.infobip.com/sms/2/text/advanced");
+  assert.equal(captured.options.headers.Authorization, "App test-key");
+  const body = JSON.parse(captured.options.body);
+  assert.deepEqual(body.messages[0].destinations, [
+    { to: "+639123456789" },
+    { to: "+639987654321" }
+  ]);
+  assert.equal(JSON.stringify(result).includes("test-key"), false);
+});
+
 
 test("rejects SMS requests without Firebase Auth and App Check", async () => {
   const response = await worker.fetch(new Request("https://sms.example/bridge/sms", {
