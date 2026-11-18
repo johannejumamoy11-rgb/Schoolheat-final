@@ -117,8 +117,8 @@ Arduino IDE to check whether the sketch itself compiles.
    powershell -ExecutionPolicy Bypass -File .\start-local-bridge.ps1
    ```
 
-   At the hidden prompt, enter the Semaphore API key to enable SMS, or leave
-   it blank if you only need sensor sync. The key stays in memory and is not
+   At the hidden prompt, enter the SMS provider credentials to enable SMS, or leave
+   them blank if you only need sensor sync. Secrets stay outside saved browser code
    saved.
 3. Keep the PowerShell window open. In the GitHub Pages app, go to **Monitor**,
    select the sensor location, and click **Auto-Read ESP32**. The first sync
@@ -164,7 +164,7 @@ outage; after it restarts, the laptop must reconnect to set its clock. Any
 backlog from a reboot that was never time-synchronized is retained on the
 ESP32 and is not imported with invented timestamps. Phone push and SMS need
 internet and do not work while the laptop is off. SMS uses the hosted
-Cloudflare Worker and Semaphore; it does not use the local ESP32 bridge or
+Cloudflare Worker and Infobip; it does not use the local ESP32 bridge or
 Firebase Functions.
 
 The browser cannot directly fetch the ESP32's HTTP API from GitHub Pages HTTPS
@@ -172,20 +172,20 @@ in browsers that block mixed content. Use the local bridge for Wi-Fi sync or
 Bluetooth sync to avoid that HTTP request. Keep the ESP32 API on its
 password-protected access point; do not connect it to a public network.
 
-SchoolHeat supports browser push and optional Semaphore SMS for Hinga/Hinto
+SchoolHeat supports browser push and optional Infobip SMS for Hinga/Hinto
 heat alerts. SMS is disabled by default. In **Settings**, enter up to five
-Philippine mobile numbers and enable **SMS Alerts (Semaphore)** to send text
+Philippine mobile numbers and enable **SMS Alerts (Infobip)** to send text
 alerts. Numbers are saved in that browser's local settings and sent through
 the Cloudflare Worker only when an SMS alert is requested; only enter numbers
 with their owners' consent. Alerts are generated when a new reading enters
 Hinga/Hinto or changes between those levels. The Worker verifies Firebase
-Anonymous Auth and App Check tokens, keeps the Semaphore API key in a Cloudflare
-secret, and allows one SMS request every five minutes per account, including
+Anonymous Auth and App Check tokens, keeps Infobip credentials in Cloudflare
+secrets, and allows one SMS request every five minutes per account, including
 test messages. No local bridge is needed for SMS (the bridge remains optional
 for ESP32 Wi-Fi sync).
 
-The app's cached offline shell does not make Semaphore available offline:
-Semaphore needs internet to deliver messages. If internet is unavailable, up
+The app's cached offline shell does not make Infobip available offline:
+Infobip needs internet to deliver messages. If internet is unavailable, up
 to 20 pending SMS are saved in this browser and retried when the app is online
 again. The browser must remain open for automatic retries. If the app is
 reopened with queued alerts, SchoolHeat asks before retrying; choose **Cancel**
@@ -197,22 +197,19 @@ in this browser's local storage until sent; clearing the browser's site data
 deletes them. The Worker caches successful results for an SMS request ID so a
 lost response does not cause a second send. Retryable errors keep the message
 queued and show the provider HTTP status and retry delay when available. A
-failure while Semaphore is processing the request can still leave delivery
-uncertain; check Semaphore's message history before manually resending. For a
+failure while Infobip is processing the request can still leave delivery
+uncertain; check Infobip's message history before manually resending. For a
 no-modem setup, keep the
 laptop on its normal internet connection and sync readings over Bluetooth. If
 using ESP32 Wi-Fi sync, the laptop needs a separate internet connection at the
 same time (for example, wired Ethernet). The ESP32 access point itself does not
 provide internet.
 
-Semaphore currently lists outbound SMS at PHP 0.56 per text before VAT (about
-PHP 0.63 including 12% VAT), billed per recipient and per message segment.
-For example, one one-segment alert per day is approximately PHP 19/month for
-one recipient or PHP 94/month for five recipients. Longer messages may use
-multiple segments. Check [Semaphore's current pricing](https://semaphore.co)
-before purchasing credits. Test SMS messages also use credits.
+Infobip pricing varies by destination, sender, balance, and message segment.
+Check the Infobip Philippines pricing in the account portal before purchasing
+credit. Test SMS messages also use credit.
 
-Push does not use Semaphore credits; receiving phones need Wi-Fi or mobile
+Push does not use Infobip credit; receiving phones need Wi-Fi or mobile
 data. Firebase Cloud Functions are used for phone push only. Deploying them
 requires a Firebase billing-enabled (Blaze) project, and Google Cloud usage
 may be billed. SMS needs Firebase Anonymous Auth and App Check, but does not
@@ -223,7 +220,7 @@ check current pricing and quotas.
 ## Requirements
 
 - A public HTTPS hosting domain for SchoolHeat.
-- A Semaphore account with credits and an API key if using SMS alerts.
+- An Infobip account with Philippine SMS enabled, an API key, base URL, and approved sender if using SMS alerts.
 - For SMS: a Cloudflare account, Node.js/npm, a Firebase project configured in
   `cloud_config.js`, Firebase Anonymous Auth, and Firebase App Check.
 - For phone push only: the Firebase CLI, an FCM Web Push certificate key, and
@@ -267,23 +264,27 @@ or Firebase Blaze billing.
    npm test
    npx wrangler login
    npm run deploy
-   npx wrangler secret put SEMAPHORE_API_KEY
+   npx wrangler secret put INFOBIP_API_KEY
+   npx wrangler secret put INFOBIP_BASE_URL
+   npx wrangler secret put INFOBIP_SENDER
    ```
 
-   Enter the Semaphore API key only at Wrangler's secret prompt. After deploy,
+   Enter the Infobip API key, Infobip base URL, and approved sender name only at
+   Wrangler's secret prompts. After deploy,
    copy the Worker URL printed by Wrangler into `smsWorkerUrl` in
    `cloud_config.js`, then publish the updated website. Do not put the API key
-   in `cloud_config.js` or browser code. Check Cloudflare's current limits and
+   in `cloud_config.js` or browser code. Check Infobip's Philippines pricing and
+   Cloudflare's current limits and
    pricing for Workers and Durable Objects before deployment.
 
 7. Deploy the web app to the configured HTTPS domain. In **Settings**, enter
-   recipient numbers and enable **SMS Alerts (Semaphore)**. Use **Send Test
+   recipient numbers and enable **SMS Alerts (Infobip)**. Use **Send Test
    SMS** only when ready to spend credits. To use push, enable **Phone Push
    Alerts** on the laptop running SchoolHeat and on each receiving phone, allow
    browser notifications, and use **Send Test Phone Push**.
 
 The device running SchoolHeat must be on to process new sensor readings and
-send alerts. SMS needs internet and Semaphore credits; up to 20 alerts are
+send alerts. SMS needs internet and Infobip credit; up to 20 alerts are
 queued in the browser while offline and retried after connectivity returns.
 SMS is rate-limited to one request every five minutes per Firebase account.
 Push recipients need internet to receive notifications, and phone push is limited

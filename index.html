@@ -677,8 +677,8 @@
         </div>
         <div class="glass-card setting-item">
           <div class="setting-info">
-            <h4>SMS Alerts (Semaphore)</h4>
-            <p>Send paid text alerts through the hosted Semaphore relay</p>
+            <h4>SMS Alerts (Infobip)</h4>
+            <p>Send paid text alerts through the hosted Infobip relay</p>
           </div>
           <label class="toggle">
             <input type="checkbox" id="setting-sms-alerts">
@@ -692,8 +692,8 @@
           <h4 class="settings-section-title">Alert Notifications</h4>
           <label for="setting-sms-numbers">SMS recipient numbers (Philippine mobile numbers; up to 5)</label>
           <textarea id="setting-sms-numbers" class="input-field" rows="2" placeholder="09XXXXXXXXX, +639XXXXXXXXX" style="margin-top: 8px; resize: vertical;"></textarea>
-          <p class="setting-hint">Separate numbers with commas, semicolons, or new lines. Add only numbers whose owners agreed to receive alerts. Numbers are saved in this browser only. SMS is off by default and costs about PHP 0.63 per recipient per text including VAT; long messages may use multiple texts. Use Semaphore credits to send.</p>
-          <p class="setting-hint">SMS needs the Cloudflare Worker URL in cloud_config.js, Firebase Anonymous Auth/App Check, and internet. The Semaphore key stays on the Worker, not in this website. Up to 20 alerts can queue in this browser while offline; SMS cannot be delivered while fully offline. On reopening with queued alerts, SchoolHeat asks before retrying. No local bridge or Firebase Functions are needed for SMS.</p>
+          <p class="setting-hint">Separate numbers with commas, semicolons, or new lines. Add only numbers whose owners agreed to receive alerts. Numbers are saved in this browser only. SMS is off by default and provider fees apply per recipient and message segment. Use Infobip account credit to send.</p>
+          <p class="setting-hint">SMS needs the Cloudflare Worker URL in cloud_config.js, Firebase Anonymous Auth/App Check, and internet. Infobip credentials stay on the Worker, not in this website. Up to 20 alerts can queue in this browser while offline; SMS cannot be delivered while fully offline. On reopening with queued alerts, SchoolHeat asks before retrying. No local bridge or Firebase Functions are needed for SMS.</p>
           <p class="setting-hint">Phone Push does not use SMS credits, but receiving phones need Wi-Fi/mobile data. Enable push on each receiving device. Firebase Functions may incur Google Cloud charges.</p>
           <button class="btn-secondary" style="width: 100%; margin-top: 10px;" onclick="app.testPushAlert()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>

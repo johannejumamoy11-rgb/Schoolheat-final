@@ -1,4 +1,29 @@
 {
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "**/.*",
+      "**/node_modules/**",
+      "functions/**",
+      "sms-worker/**",
+      "**/*.zip",
+      "**/*.csv",
+      "**/*.ipynb"
+    ],
+    "headers": [
+      {
+        "source": "/service-worker.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ]
+  },
   "functions": {
     "source": "functions",
     "codebase": "schoolheat",
