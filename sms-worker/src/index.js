@@ -205,76 +205,106 @@ export function createMessage(payload) {
   return `SchoolHeat ${level} warning at ${location.slice(0, 60)}: ${temperature.toFixed(1)}C, RH ${humidity.toFixed(1)}%, heat index ${heatIndex.toFixed(1)}C (reading ${timeLabel}).`;
 }
 
-export async function sendSms(env, numbers, message, fetchImpl = fetch) {
-  if (!env.INFOBIP_API_KEY || !env.INFOBIP_BASE_URL) {
-    throw new Error("Infobip is not configured on the SMS Worker.");
-  }
-  const baseUrl = env.INFOBIP_BASE_URL.replace(/\/$/, "");
-  const endpoint = baseUrl.includes("/sms/")
-    ? baseUrl
-    : `${baseUrl}/sms/2/text/advanced`;
-  const sender = env.INFOBIP_SENDER || "SchoolHeat";
-  const body = {
-    messages: [{
-      from: sender,
-      destinations: numbers.map(number => ({ to: `+${number}` })),
-      text: message
-    }]
-  };
-  let response;
-  try {
-    response = await fetchImpl(endpoint, {
-      method: "POST",
-      headers: {
-        "Authorization": `App ${env.INFOBIP_API_KEY}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-  } catch {
-    return { status: 503, body: { error: "Could not reach Infobip; the alert can be retried." } };
+export async function sendSms(env, numbers, message, requestId, fetchImpl = fetch) {
+  const apiKey = env.CLOUDSMS_API_KEY?.trim();
+  const apiSecret = env.CLOUDSMS_API_SECRET?.trim();
+  if (!apiKey || !apiSecret) {
+    throw new Error("CLOUDSMS is not configured on the SMS Worker.");
   }
 
-  if (response.status === 429 || response.status >= 500) {
-    const headerRetryAfter = Number(response.headers.get("Retry-After"));
+  const endpoint = "https://api.cloudsms.io/v1/sms/send";
+  const authorization = `Basic ${btoa(`${apiKey}:${apiSecret}`)}`;
+  const attempts = await Promise.all(numbers.map(async (number, index) => {
+    let response;
+    try {
+      response = await fetchImpl(endpoint, {
+        method: "POST",
+        headers: {
+          "Authorization": authorization,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": `${requestId}-${index}`
+        },
+        body: JSON.stringify({ destination: number, message })
+      });
+    } catch {
+      return { kind: "retryable" };
+    }
+
+    if (response.status === 429 || response.status >= 500) {
+      return {
+        kind: "retryable",
+        providerStatus: response.status,
+        retryAfterSeconds: Number(response.headers.get("Retry-After"))
+      };
+    }
+    if (!response.ok) {
+      console.warn("CLOUDSMS rejected a recipient request.", response.status);
+      return { kind: "rejected", providerStatus: response.status };
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      return { kind: "uncertain" };
+    }
+    if (data?.success !== true || !data.data || typeof data.data !== "object") {
+      return { kind: "rejected", providerStatus: response.status };
+    }
+
+    const messageId = data.data.message_id;
+    let status = data.data.status;
+    if (Array.isArray(data.data.destinations)) {
+      const destination = data.data.destinations.find(item => item?.destination === number);
+      if (!destination) return { kind: "uncertain" };
+      status = destination.status;
+    }
+    if (typeof messageId !== "string" || !messageId.trim() || typeof status !== "string") {
+      return { kind: "uncertain" };
+    }
+    if (["CREATED", "QUEUED", "SENT"].includes(status)) return { kind: "accepted" };
+    if (["FAILED", "REJECTED", "CANCELLED"].includes(status)) return { kind: "rejected" };
+    return { kind: "uncertain" };
+  }));
+
+  const accepted = attempts.filter(attempt => attempt.kind === "accepted").length;
+  if (accepted > 0) {
+    return {
+      status: 200,
+      body: { sent: accepted, failed: Math.max(numbers.length - accepted, 0), queued: true }
+    };
+  }
+  if (attempts.some(attempt => attempt.kind === "uncertain")) {
+    return {
+      status: 409,
+      body: { error: "CLOUDSMS returned an unclear response. Check CLOUDSMS message activity before retrying." }
+    };
+  }
+  if (attempts.some(attempt => attempt.kind === "retryable")) {
     const retryAfterSeconds = Math.max(
       RATE_LIMIT_MS / 1000,
-      Number.isFinite(headerRetryAfter) && headerRetryAfter > 0
-        ? Math.ceil(headerRetryAfter)
-        : 0
+      ...attempts.map(attempt =>
+        Number.isFinite(attempt.retryAfterSeconds) && attempt.retryAfterSeconds > 0
+          ? Math.ceil(attempt.retryAfterSeconds)
+          : 0
+      )
     );
-    console.warn("Infobip returned a retryable SMS response.", response.status);
+    const providerStatus = attempts.find(attempt => attempt.providerStatus)?.providerStatus;
+    console.warn("CLOUDSMS returned a retryable response.", providerStatus);
     return {
       status: 503,
       body: {
-        error: "Infobip is temporarily unavailable; the alert can be retried.",
-        providerStatus: response.status,
+        error: "CLOUDSMS is temporarily unavailable; the alert can be retried.",
+        ...(providerStatus ? { providerStatus } : {}),
         retryAfterSeconds
       }
     };
   }
-  if (!response.ok) {
-    return { status: 422, body: { error: `Infobip rejected the request (HTTP ${response.status}). Check the API key, sender, balance, and recipient numbers.` } };
-  }
-
-  let data;
-  try {
-    data = await response.json();
-  } catch {
-    return { status: 409, body: { error: "Infobip returned an unreadable response. Check your message history before retrying." } };
-  }
-  const records = Array.isArray(data?.messages) ? data.messages : [];
-  const accepted = records.filter(record => {
-    const status = record?.status?.groupName?.toLowerCase();
-    return ["pending", "accepted", "sent", "delivered"].includes(status);
-  }).length;
-  if (accepted === 0) {
-    return { status: 422, body: { error: "Infobip did not accept the messages. Check the sender, balance, and recipient numbers." } };
-  }
   return {
-    status: 200,
-    body: { sent: accepted, failed: Math.max(numbers.length - accepted, 0), queued: false }
+    status: 422,
+    body: {
+      error: "CLOUDSMS rejected the request. Check the API credentials, approved Sender ID, account balance, and recipient numbers."
+    }
   };
 }
 
@@ -317,8 +347,8 @@ async function handleSms(request, env) {
     return jsonResponse(origin, 400, { error: error.message });
   }
 
-  if (!env.INFOBIP_API_KEY || !env.INFOBIP_BASE_URL) {
-    return jsonResponse(origin, 503, { error: "Infobip is not configured in the Cloudflare Worker." });
+  if (!env.CLOUDSMS_API_KEY?.trim() || !env.CLOUDSMS_API_SECRET?.trim()) {
+    return jsonResponse(origin, 503, { error: "CLOUDSMS is not configured in the Cloudflare Worker." });
   }
 
   const limiterId = env.SMS_RATE_LIMITER.idFromName(userId);
@@ -345,7 +375,7 @@ async function handleSms(request, env) {
     });
   }
 
-  const result = await sendSms(env, numbers, message);
+  const result = await sendSms(env, numbers, message, requestId);
   if (result.status !== 503) {
     await limiter.fetch("https://sms-rate-limit/complete", {
       method: "POST",
