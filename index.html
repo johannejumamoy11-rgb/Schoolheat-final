@@ -230,6 +230,7 @@
           <span class="reading-location" id="latest-location">—</span>
           <span class="reading-time" id="latest-time">—</span>
         </div>
+        <div class="reading-source" id="latest-source">No source information</div>
         <div class="reading-freshness nodata" id="reading-freshness">No readings available</div>
         <div class="reading-main">
           <div class="reading-gauge-wrap">
@@ -389,6 +390,32 @@
           <div class="sensor-sub">DHT22 • ESP32</div>
         </div>
       </div>
+
+      <section class="glass-card sensor-trust-card" aria-labelledby="sensor-trust-title">
+        <div class="card-header">
+          <h3 id="sensor-trust-title">Sensor Trust</h3>
+          <span class="sensor-trust-state" id="sensor-trust-contact">No device response in this session</span>
+        </div>
+        <div class="sensor-trust-grid">
+          <div class="sensor-trust-metric">
+            <span>Saved ESP32 readings</span>
+            <strong id="sensor-trust-count">0</strong>
+          </div>
+          <div class="sensor-trust-metric">
+            <span>Latest DHT22 report</span>
+            <strong id="sensor-trust-sample">Not checked</strong>
+          </div>
+          <div class="sensor-trust-metric">
+            <span>Recorded cadence and gaps</span>
+            <strong id="sensor-trust-cadence">No ESP32 history</strong>
+          </div>
+          <div class="sensor-trust-metric">
+            <span>ESP32 flash log</span>
+            <strong id="sensor-trust-storage">Not checked</strong>
+          </div>
+        </div>
+        <p class="setting-hint" id="sensor-trust-caveat">Connectivity, successful transmission, valid sensor readings, and measurement accuracy are different. SchoolHeat cannot verify calibration or accuracy.</p>
+      </section>
     </section>
 
     <!-- TAB 3: HISTORY -->
@@ -421,6 +448,60 @@
           <option value="extreme">Hinto</option>
         </select>
       </div>
+
+      <section class="glass-card thermal-replay-card" aria-labelledby="thermal-replay-title">
+        <div class="card-header">
+          <h3 id="thermal-replay-title">Thermal Replay</h3>
+          <span class="replay-mode-tag">Recorded data only</span>
+        </div>
+        <p class="setting-hint">Replay stored, non-demo readings for one location and date. The timeline never fills gaps with estimated values.</p>
+        <div class="replay-filter-grid">
+          <div class="input-group">
+            <label for="thermal-replay-location">Location</label>
+            <select id="thermal-replay-location" class="input-field"></select>
+          </div>
+          <div class="input-group">
+            <label for="thermal-replay-date">Monitoring date</label>
+            <select id="thermal-replay-date" class="input-field"></select>
+          </div>
+          <div class="input-group">
+            <label for="thermal-replay-compare-date">Compare with date</label>
+            <select id="thermal-replay-compare-date" class="input-field"></select>
+          </div>
+        </div>
+        <div class="replay-timeline-wrap">
+          <label for="thermal-replay-timeline">Recorded reading timeline</label>
+          <input id="thermal-replay-timeline" type="range" min="0" max="0" value="0" disabled>
+          <div class="replay-range-labels"><span>First record</span><span id="thermal-replay-position">No readings</span><span>Last record</span></div>
+        </div>
+        <div class="replay-actions">
+          <button class="btn-secondary" id="thermal-replay-previous" type="button" disabled>Previous</button>
+          <button class="btn-primary" id="thermal-replay-play" type="button" disabled>Play</button>
+          <button class="btn-secondary" id="thermal-replay-next" type="button" disabled>Next</button>
+          <label for="thermal-replay-speed">Playback speed</label>
+          <select id="thermal-replay-speed" class="input-field">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+        </div>
+        <div class="replay-reading-card" id="thermal-replay-reading" hidden aria-live="polite">
+          <div class="replay-reading-heading">
+            <strong id="thermal-replay-timestamp">—</strong>
+            <span id="thermal-replay-source">—</span>
+          </div>
+          <div class="replay-reading-metrics">
+            <div><span>Temperature</span><strong id="thermal-replay-temperature">—</strong></div>
+            <div><span>Relative humidity</span><strong id="thermal-replay-humidity">—</strong></div>
+            <div><span>Heat Index</span><strong id="thermal-replay-heat-index">—</strong></div>
+            <div><span>Classification</span><strong id="thermal-replay-status">—</strong></div>
+          </div>
+          <p class="setting-hint" id="thermal-replay-gap"></p>
+          <div class="replay-comparison" id="thermal-replay-comparison" aria-live="polite"></div>
+        </div>
+        <div class="empty-desc" id="thermal-replay-empty">No non-demo readings are available for replay. Sync a sensor or import verified measurements first.</div>
+      </section>
 
       <div class="glass-card chart-card" id="history-analytics">
         <div class="card-header">
@@ -491,6 +572,7 @@
           <div>
             <h3>Best Model: <span id="forecast-best-model-name">Not selected</span> · 30 Minutes Ahead</h3>
             <span class="forecast-best-badge" id="forecast-best-badge">Accuracy not measured</span>
+            <span class="forecast-generated-at" id="forecast-generated-at">Forecast generation time unavailable</span>
           </div>
           <span class="forecast-badge" id="forecast-badge">Best prediction</span>
         </div>
@@ -589,6 +671,7 @@
           <div class="legend-item"><span class="legend-pin extreme"></span><span>Hinto (42°C and above)</span></div>
           <div class="legend-item"><span class="legend-pin nodata"></span><span>No Data</span></div>
         </div>
+        <p class="map-data-note">Each pin reflects only the latest saved record for that mapped location. Demo and historical readings are labeled in the pin details; no value is copied to sites without a reading. A recent timestamp is not proof of a current device connection.</p>
       </div>
     </section>
 
@@ -811,9 +894,30 @@
         </div>
       </section>
 
+      <section class="about-section knowledge-assistant-section" aria-labelledby="knowledge-assistant-title">
+        <div class="about-section-heading">
+          <span class="about-section-index">05 / LOCAL DATA ASSISTANT</span>
+          <h3 id="knowledge-assistant-title">Ask SchoolHeat</h3>
+          <p class="about-section-description">Answers are generated in this browser from stored, non-demo readings and documented app behavior. Questions and readings are not sent to an AI service.</p>
+        </div>
+        <div class="glass-card knowledge-assistant-card">
+          <label for="knowledge-question">Ask about saved readings or SchoolHeat</label>
+          <div class="knowledge-assistant-input-row">
+            <input id="knowledge-question" class="input-field" type="text" maxlength="240" autocomplete="off" placeholder="e.g. What was today's highest Heat Index?">
+            <button class="btn-primary" id="knowledge-ask-button" type="button">Ask</button>
+          </div>
+          <div class="knowledge-question-chips" aria-label="Example questions">
+            <button type="button" class="btn-secondary" data-knowledge-question="What was the highest Heat Index today?">Highest Heat Index today</button>
+            <button type="button" class="btn-secondary" data-knowledge-question="How did humidity change today?">Humidity change today</button>
+            <button type="button" class="btn-secondary" data-knowledge-question="How reliable is the sensor data?">Sensor data quality</button>
+          </div>
+          <div class="knowledge-answer" id="knowledge-answer" role="status" aria-live="polite">Ask a question to see an answer grounded in the data available on this device.</div>
+        </div>
+      </section>
+
       <section class="about-section about-faq" aria-labelledby="about-faq-title">
         <div class="about-section-heading">
-          <span class="about-section-index">05 / QUICK ANSWERS</span>
+          <span class="about-section-index">06 / QUICK ANSWERS</span>
           <h3 id="about-faq-title">Frequently asked questions.</h3>
         </div>
         <details class="about-faq-item">
@@ -871,6 +975,18 @@
           <p class="setting-hint" id="offline-status">Checking network status...</p>
           <p class="setting-hint">Install SchoolHeat and open it online once so its app files are saved on this device. Sync over Wi-Fi with the laptop bridge, or use Bluetooth without joining the ESP32 Wi-Fi. Readings are stored on this device and are not shared automatically with other devices.</p>
           <button class="btn-secondary" id="install-app-button" type="button" style="width: 100%; margin-top: 10px;">Install SchoolHeat</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="glass-card">
+          <h4 class="settings-section-title">Color System</h4>
+          <p class="setting-hint">Automatic Mode Colors gives each page its own accent. Unified Thermal Theme uses thermal orange and electric cyan across the app. Neither mode changes measurements or forecasts.</p>
+          <label for="setting-color-mode">Accent color mode</label>
+          <select id="setting-color-mode" class="input-field" style="margin-top: 8px;">
+            <option value="automatic">Automatic Mode Colors</option>
+            <option value="unified">Unified Thermal Theme</option>
+          </select>
         </div>
       </div>
 
@@ -1033,7 +1149,7 @@
 
   <nav class="bottom-nav" id="bottom-nav" aria-label="Primary navigation">
     <div class="sidebar-brand">
-      <span class="sidebar-brand-mark" aria-hidden="true">SH</span>
+      <img src="assets/app-logo.png" alt="" class="sidebar-brand-logo" aria-hidden="true">
       <div><span class="sidebar-brand-kicker">THERMAL INTELLIGENCE</span><strong>SchoolHeat</strong></div>
     </div>
     <button class="sidebar-collapse-toggle" id="sidebar-collapse-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">

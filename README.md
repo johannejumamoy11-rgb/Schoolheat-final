@@ -13,7 +13,9 @@ automatically sync between devices.
 
 The interface uses the Midnight Thermal Intelligence theme, with a collapsible
 desktop navigation rail and a mobile navigation drawer. The theme can be
-changed in Settings. The About tab explains SchoolHeat's purpose, workflow,
+changed in Settings. Choose Automatic Mode Colors for page-specific accents or
+Unified Thermal Theme for one consistent palette; neither option changes
+measurements, heat-index categories, or forecasts. The About tab explains SchoolHeat's purpose, workflow,
 the DepEd 4H heat-index bands, data limits, and heat-safety guardrails. It also
 links to the Sensor Monitor, Campus Map, and Hotlines. This visual update does
 not change heat-index calculations, stored readings, sensor communication, or
@@ -28,6 +30,16 @@ The Language setting offers English, Tagalog, Bisaya (Cebuano), and Waray. It
 translates the navigation, common Monitor, History, Map, and Hotlines labels,
 selected safety guidance, and the About page. Sensor/location names and some
 detailed technical messages remain in English.
+
+The Monitor includes a Sensor Trust summary of saved ESP32 records, reported
+device health, and observed logging gaps. It does not claim that a device is
+currently connected or calibrated, and it does not calculate an accuracy
+percentage. History includes Thermal Replay, which steps through actual
+non-demo readings and compares them with the nearest stored reading on another
+date; missing values are never interpolated. The About page's Ask SchoolHeat
+assistant answers a fixed set of questions locally from saved non-demo records
+and documented app behavior. It does not send questions or readings to an AI
+service.
 
 In **History**, choose a `.csv` or `.xlsx` file to import readings. Include
 timestamp (or date), temperature, and humidity columns; location is optional
@@ -49,6 +61,8 @@ official libraries; SVR uses a linear kernel.
 Validation reports MAE, RMSE, MAPE, R², and how often an actual Hinga-or-Hinto
 heat index (33°C or higher) is predicted below that threshold. MAPE omits
 holdouts with an actual value of zero, for which percentage error is undefined.
+The comparison also shows the time span of its holdout readings, and the
+forecast panel records when its prediction was generated.
 App-generated demo readings are excluded from both forecast training and
 validation. Imported files are not independently verified, so use readings
 from the ESP32 or another trusted measurement source before drawing conclusions
@@ -66,8 +80,15 @@ provided.
 The dashboard marks the latest saved reading **RECENT** for up to 15 minutes,
 then **STALE**; it also flags missing or invalid timestamps. Freshness is based
 on the reading timestamp, not a sensor connection, and a recent label does not
-confirm sensor calibration. The response guide provides general prompts for
-each 4H level; follow school policy and local advisories.
+confirm sensor calibration. The map's recent ESP32 label also describes only
+the saved timestamp and does not indicate a current connection. The response
+guide provides general prompts for each 4H level; follow school policy and
+local advisories.
+
+The campus view remains a two-dimensional map with the existing mapped
+coordinates. A verified 3D campus model, approved student comfort-feedback
+collection, and PDF reporting are not included; no geometry or feedback data
+is invented to simulate those features.
 
 Offline mode does not provide internet services: Firebase sync and phone push
 alerts need internet. For sensor readings, install the published GitHub Pages
