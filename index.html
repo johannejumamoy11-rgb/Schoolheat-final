@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0a0a14">
+  <meta name="theme-color" content="#080d18">
   <meta name="description" content="SchoolHeat Ultimate — Real-time heat index monitoring">
   <title>SchoolHeat Ultimate — TUKLAS 2026</title>
 
@@ -40,18 +40,18 @@
       border-radius:18px;
       object-fit:contain;
       animation:pulse-glow 1.8s ease-in-out infinite;
-      filter:drop-shadow(0 0 20px rgba(59,130,246,.5));
+      filter:drop-shadow(0 0 20px rgba(66,217,245,.32));
     }
     @keyframes pulse-glow{
-      0%,100%{transform:scale(1);filter:drop-shadow(0 0 16px rgba(59,130,246,.4))}
-      50%{transform:scale(1.06);filter:drop-shadow(0 0 32px rgba(59,130,246,.7))}
+      0%,100%{transform:scale(1);filter:drop-shadow(0 0 16px rgba(66,217,245,.28))}
+      50%{transform:scale(1.06);filter:drop-shadow(0 0 32px rgba(255,135,61,.38))}
     }
     .loader-brand{
       font-size:1.3rem;
       font-weight:800;
       margin-top:1rem;
       letter-spacing:.04em;
-      background:linear-gradient(135deg,#60a5fa,#a78bfa);
+      background:linear-gradient(110deg,#f4f8ff,#42d9f5 58%,#ff873d);
       background-clip:text;
       -webkit-background-clip:text;
       -webkit-text-fill-color:transparent;
@@ -74,7 +74,7 @@
     .loader-bar{
       height:100%;
       width:0%;
-      background:linear-gradient(90deg,#3b82f6,#8b5cf6);
+      background:linear-gradient(90deg,#42d9f5,#ff873d,#ff4d5a);
       border-radius:3px;
       animation:load-progress 1.2s cubic-bezier(.4,0,.2,1) forwards;
     }
@@ -91,8 +91,8 @@
       opacity:.12;
       animation:orb-float 8s ease-in-out infinite;
     }
-    .loader-orb:nth-child(1){width:280px;height:280px;background:#3b82f6;top:-40px;left:-40px;animation-delay:0s}
-    .loader-orb:nth-child(2){width:220px;height:220px;background:#8b5cf6;bottom:-20px;right:-20px;animation-delay:-4s}
+    .loader-orb:nth-child(1){width:280px;height:280px;background:#42d9f5;top:-40px;left:-40px;animation-delay:0s}
+    .loader-orb:nth-child(2){width:220px;height:220px;background:#ff873d;bottom:-20px;right:-20px;animation-delay:-4s}
     @keyframes orb-float{
       0%,100%{transform:translate(0,0) scale(1)}
       33%{transform:translate(25px,-15px) scale(1.08)}
@@ -143,14 +143,19 @@
   </div>
 
   <header class="app-header">
+    <button class="mobile-nav-toggle" id="mobile-nav-toggle" type="button" aria-label="Open navigation" aria-controls="bottom-nav" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+    </button>
     <div class="header-brand">
       <img src="assets/app-logo.png" alt="Logo" class="header-logo">
       <div class="header-text">
         <span class="header-title">SchoolHeat</span>
-        <span class="header-badge">TUKLAS 2026</span>
+        <span class="header-badge">ENVIRONMENTAL INTELLIGENCE SYSTEM</span>
+        <span class="header-project">TUKLAS 2026</span>
       </div>
     </div>
     <div class="header-right">
+      <span class="header-date" id="header-date"></span>
       <span class="header-clock" id="header-clock">--:--</span>
       <div class="auto-read-badge" id="auto-read-badge" style="display:none;">
         <span>AUTO</span>
@@ -216,6 +221,7 @@
         <p id="heat-guidance-detail">Sync a sensor or enter a reading. Without current data, this app cannot indicate classroom heat conditions.</p>
         <p class="heat-guidance-note">Heat Index is a screening indicator, not a medical assessment or an official school-closure notice. Follow school policy and local advisories.</p>
         <button class="btn-text" type="button" onclick="app.switchTab('monitor')">Open Sensor Monitor <span aria-hidden="true">→</span></button>
+        <button class="btn-text" type="button" onclick="app.switchTab('hotlines')">Emergency Hotlines <span aria-hidden="true">→</span></button>
       </section>
 
       <div class="dashboard-content-grid">
@@ -282,7 +288,7 @@
       </div>
 
       <!-- Live Gauge -->
-      <div class="glass-card monitor-gauge-card">
+      <div class="glass-card monitor-gauge-card" id="device-intelligence">
         <div class="card-header">
           <h3>Latest Sensor Reading</h3>
           <span class="monitor-live-badge nodata" id="monitor-live-badge"><span class="live-dot-sm"></span><span id="monitor-live-text">NO DATA</span></span>
@@ -314,6 +320,7 @@
               <div class="scale-fill hum" id="scale-hum-bar" style="width:0%"></div>
             </div>
           </div>
+          <p class="device-integrity-note">Reading freshness describes saved data only. It does not confirm that an ESP32 is currently connected; use the sync controls below to check the device.</p>
         </div>
       </div>
 
@@ -415,7 +422,7 @@
         </select>
       </div>
 
-      <div class="glass-card chart-card">
+      <div class="glass-card chart-card" id="history-analytics">
         <div class="card-header">
           <h3>Heat Index Trend</h3>
           <div class="chart-legend">
@@ -585,6 +592,269 @@
       </div>
     </section>
 
+    <!-- TAB 7: EMERGENCY HOTLINES -->
+    <section class="tab-panel" id="tab-hotlines">
+      <div class="hotlines-header">
+        <div>
+          <span class="hotlines-eyebrow">SCHOOLHEAT SAFETY NETWORK</span>
+          <h2 class="panel-title">Help, when it matters.</h2>
+          <p class="panel-subtitle">A clear next step for urgent situations at school or nearby.</p>
+        </div>
+        <span class="hotlines-location">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          Mahaplag, Leyte
+        </span>
+      </div>
+
+      <div class="hotlines-hero">
+        <div class="hotlines-hero-glow" aria-hidden="true"></div>
+        <div class="hotlines-hero-content">
+          <div class="hotlines-hero-meta">
+            <span class="hotlines-live-dot"></span>
+            <span>NATIONAL EMERGENCY LINE</span>
+            <span class="hotlines-availability">24 / 7</span>
+          </div>
+          <h3>Emergency signal.<br>Immediate action.</h3>
+          <p>For an urgent emergency, call 911 and describe the help needed.</p>
+          <div class="hotlines-service-chips" aria-label="Emergency types to request">
+            <span>Medical</span>
+            <span>Police</span>
+            <span>Fire</span>
+            <span>Rescue</span>
+          </div>
+          <a class="hotline-call-button" href="tel:911" aria-label="Call Philippine emergency hotline 911">
+            <span class="hotline-call-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 11.19 18a19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.09 3.18 2 2 0 0 1 4.08 1h3a2 2 0 0 1 2 1.72c.12.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.11L8.06 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.84.58 2.8.7A2 2 0 0 1 22 16.92Z"/></svg>
+            </span>
+            <span class="hotline-call-number">911</span>
+            <span class="hotline-call-label">TAP TO CALL</span>
+            <svg class="hotline-call-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
+          </a>
+          <span class="hotlines-hero-footnote">Use 911 only for emergencies. Share your location if you can.</span>
+        </div>
+        <div class="hotlines-hero-orbit hotlines-hero-orbit-one" aria-hidden="true"></div>
+        <div class="hotlines-hero-orbit hotlines-hero-orbit-two" aria-hidden="true"></div>
+        <div class="hotlines-hero-watermark" aria-hidden="true">911</div>
+      </div>
+
+      <section class="hotlines-call-prep" aria-labelledby="hotlines-call-prep-title">
+        <div class="hotlines-call-prep-heading">
+          <span class="hotlines-prep-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3H5a2 2 0 0 0-2 2c0 8.84 7.16 16 16 16a2 2 0 0 0 2-2v-3l-5-2-2 3a14 14 0 0 1-7-7l3-2-2-5Z"/></svg>
+          </span>
+          <div>
+            <span class="hotline-card-kicker">RESPONSE PROTOCOL</span>
+            <h3 id="hotlines-call-prep-title">A clear call helps responders act</h3>
+          </div>
+        </div>
+        <div class="hotlines-call-steps">
+          <div class="hotlines-call-step">
+            <span>01</span>
+            <div><strong>Where are you?</strong><small>Give the school name, building, or nearest landmark.</small></div>
+          </div>
+          <div class="hotlines-call-step">
+            <span>02</span>
+            <div><strong>What happened?</strong><small>Describe the emergency and any heat-related symptoms.</small></div>
+          </div>
+          <div class="hotlines-call-step">
+            <span>03</span>
+            <div><strong>Stay available</strong><small>Answer questions and follow the responder’s instructions.</small></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="hotlines-grid">
+        <article class="hotline-info-card">
+          <div class="hotline-info-icon heat-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 14.76V5a3 3 0 0 0-6 0v9.76a5 5 0 1 0 6 0Z"/><path d="M11 12V5"/></svg>
+          </div>
+          <span class="hotline-card-kicker">HEAT-RELATED DISTRESS</span>
+          <h3>Get help promptly</h3>
+          <p>If someone becomes confused, faints, or seems seriously unwell in the heat, alert school staff and call <a href="tel:911">911</a>. Move them to a cooler place while help is arranged.</p>
+        </article>
+
+        <article class="hotline-info-card local-contact-card">
+          <div class="hotline-info-icon local-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h.01M15 10h.01M9 14h.01M15 14h.01M10 21v-4h4v4"/></svg>
+          </div>
+          <span class="hotline-card-kicker">LOCAL SCHOOL CONTACTS</span>
+          <h3>Mahaplag numbers</h3>
+          <p>Local responder and school-office numbers are not yet verified for this app. Ask the school to confirm official contacts before relying on or publishing them.</p>
+          <span class="hotline-verify-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+            Awaiting school verification
+          </span>
+        </article>
+      </div>
+
+      <div class="hotlines-callout">
+        <div class="hotlines-callout-mark" aria-hidden="true">!</div>
+        <div>
+          <h3>Important</h3>
+          <p>SchoolHeat is a monitoring and alert tool, not an emergency dispatch or medical service. SMS alerts do not contact responders. For immediate danger, call 911 or follow your school's emergency procedures.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 8: ABOUT -->
+    <section class="tab-panel" id="tab-about">
+      <header class="about-hero">
+        <div class="about-hero-copy">
+          <span class="about-eyebrow">ABOUT SCHOOLHEAT <span aria-hidden="true">/</span> CAMPUS HEAT INTELLIGENCE</span>
+          <h2>See the heat.<br><span>Understand the context.</span></h2>
+          <p>SchoolHeat brings campus heat-index readings, locations, and practical safety context into one place—so school communities can make more informed decisions.</p>
+          <div class="about-hero-actions">
+            <button class="btn-primary" type="button" onclick="app.switchTab('monitor')">Open Sensor Monitor <span aria-hidden="true">→</span></button>
+            <button class="btn-secondary" type="button" onclick="app.switchTab('map')">Open Campus Map</button>
+            <button class="btn-secondary" type="button" onclick="app.switchTab('hotlines')">View Hotlines</button>
+          </div>
+        </div>
+        <div class="about-hero-stat" aria-label="29 mapped campus sites">
+          <span class="about-stat-kicker">CAMPUS VIEW</span>
+          <strong>29</strong>
+          <span class="about-stat-label">mapped campus sites</span>
+          <span class="about-stat-rule" aria-hidden="true"></span>
+          <span class="about-stat-foot">DepEd 4H heat-index levels</span>
+        </div>
+        <div class="about-hero-orbit about-hero-orbit-one" aria-hidden="true"></div>
+        <div class="about-hero-orbit about-hero-orbit-two" aria-hidden="true"></div>
+      </header>
+
+      <section class="about-section" aria-labelledby="about-purpose-title">
+        <div class="about-section-heading">
+          <span class="about-section-index">01 / THE PURPOSE</span>
+          <h3 id="about-purpose-title">One clearer view of campus conditions.</h3>
+        </div>
+        <div class="about-purpose-card glass-card">
+          <div class="about-purpose-mark" aria-hidden="true">SH</div>
+          <div>
+            <span class="about-card-kicker">BUILT FOR HEAT AWARENESS</span>
+            <p>Review saved temperature and humidity readings as heat-index levels across campus locations. SchoolHeat can receive readings entered in the app or imported from a supported ESP32 setup, then present history and forecasts when enough eligible data is available.</p>
+            <p class="about-purpose-note">It is a decision-support tool—not a medical assessment, official closure notice, or emergency dispatch service.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="about-section" aria-labelledby="about-scale-title">
+        <div class="about-section-heading">
+          <span class="about-section-index">02 / THE 4H SCALE</span>
+          <h3 id="about-scale-title">Four labels. One shared reference.</h3>
+          <p class="about-section-description">SchoolHeat uses these DepEd 4H heat-index bands to describe recorded conditions.</p>
+        </div>
+        <div class="about-heat-scale">
+          <article class="about-heat-level level-hayo">
+            <span>HAYO</span>
+            <strong>&lt;27°C</strong>
+          </article>
+          <article class="about-heat-level level-hinay">
+            <span>HINAY</span>
+            <strong>27–32°C</strong>
+          </article>
+          <article class="about-heat-level level-hinga">
+            <span>HINGA</span>
+            <strong>33–41°C</strong>
+          </article>
+          <article class="about-heat-level level-hinto">
+            <span>HINTO</span>
+            <strong>42°C+</strong>
+          </article>
+        </div>
+        <p class="about-scale-note">These are screening categories, not a medical assessment or a substitute for current school and local guidance.</p>
+      </section>
+
+      <section class="about-section" aria-labelledby="about-workflow-title">
+        <div class="about-section-heading">
+          <span class="about-section-index">03 / HOW IT HELPS</span>
+          <h3 id="about-workflow-title">From a reading to a better-informed response.</h3>
+        </div>
+        <div class="about-workflow-grid">
+          <article class="about-workflow-card glass-card">
+            <span class="about-workflow-number">01</span>
+            <h4>Capture conditions</h4>
+            <p>Enter a reading or sync a supported ESP32 sensor to save temperature and humidity for a selected location.</p>
+          </article>
+          <article class="about-workflow-card glass-card">
+            <span class="about-workflow-number">02</span>
+            <h4>See the campus picture</h4>
+            <p>Use the dashboard, map, and history to review recorded heat-index levels across mapped sites.</p>
+          </article>
+          <article class="about-workflow-card glass-card">
+            <span class="about-workflow-number">03</span>
+            <h4>Plan with context</h4>
+            <p>Forecasts and optional alerts can support awareness. Check current conditions and follow school procedures before acting.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="about-section" aria-labelledby="about-principles-title">
+        <div class="about-section-heading">
+          <span class="about-section-index">04 / OUR APPROACH</span>
+          <h3 id="about-principles-title">Useful information, with its limits in view.</h3>
+        </div>
+        <div class="about-principles-grid">
+          <article class="about-principle-card">
+            <span aria-hidden="true">A</span>
+            <div><h4>Evidence over assumption</h4><p>Heat levels come from recorded conditions. Forecasts are estimates, not measured future temperatures.</p></div>
+          </article>
+          <article class="about-principle-card">
+            <span aria-hidden="true">B</span>
+            <div><h4>Freshness is not connectivity</h4><p>A recent saved reading shows its timestamp; it does not prove a sensor is online or calibrated.</p></div>
+          </article>
+          <article class="about-principle-card">
+            <span aria-hidden="true">C</span>
+            <div><h4>Local data, clearly scoped</h4><p>Readings are stored in this browser. Sharing across devices depends on configured sync and internet access.</p></div>
+          </article>
+          <article class="about-principle-card">
+            <span aria-hidden="true">D</span>
+            <div><h4>People make the decisions</h4><p>Use the heat index as a screening indicator, then follow school policy and local advisories.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="about-section about-faq" aria-labelledby="about-faq-title">
+        <div class="about-section-heading">
+          <span class="about-section-index">05 / QUICK ANSWERS</span>
+          <h3 id="about-faq-title">Frequently asked questions.</h3>
+        </div>
+        <details class="about-faq-item">
+          <summary>Does “Recent” mean the sensor is connected right now?</summary>
+          <p>No. It describes the timestamp of the last saved reading. Use the Monitor sync controls to check the device.</p>
+        </details>
+        <details class="about-faq-item">
+          <summary>Are heat-index levels a medical diagnosis or school-closure decision?</summary>
+          <p>No. They are screening information. Follow school procedures, official guidance, and emergency services when needed.</p>
+        </details>
+        <details class="about-faq-item">
+          <summary>Where are my readings saved?</summary>
+          <p>Readings are stored in this browser. They are not automatically shared with other devices; cloud sync depends on the app’s configuration and internet access.</p>
+        </details>
+        <details class="about-faq-item">
+          <summary>Are forecasts measured readings or guarantees?</summary>
+          <p>No. Forecasts are estimates based on eligible, non-demo readings from the same location. Actual conditions may differ.</p>
+        </details>
+        <details class="about-faq-item">
+          <summary>How can I add a reading?</summary>
+          <p>Open Sensor Monitor to enter temperature and humidity manually, sync over Wi-Fi using the laptop bridge, or sync directly with a supported ESP32 over Bluetooth in a compatible desktop browser.</p>
+        </details>
+        <details class="about-faq-item">
+          <summary>Why am I seeing demo readings?</summary>
+          <p>SchoolHeat can create clearly marked sample readings to help you preview the interface. Demo readings are excluded from forecast training and validation. Use your own trusted sensor readings when reviewing real conditions.</p>
+        </details>
+        <details class="about-faq-item">
+          <summary>How much history does forecasting need?</summary>
+          <p>It needs about two hours of eligible readings from the same location. Gaps can extend the wait, and demo readings are excluded. Forecasts should be treated as estimates, not guarantees.</p>
+        </details>
+        <details class="about-faq-item">
+          <summary>Do SchoolHeat alerts contact 911 or local responders?</summary>
+          <p>No. Browser, phone push, and SMS alerts notify configured users only; they do not contact emergency responders. For an emergency, call 911 and follow school procedures.</p>
+        </details>
+        <details class="about-faq-item">
+          <summary>Do SMS and phone alerts work offline?</summary>
+          <p>No. Delivery requires internet access. SMS may remain queued in this browser while offline and can retry after connectivity returns; it is not delivered until the app is online.</p>
+        </details>
+      </section>
+    </section>
+
     <!-- TAB 6: SETTINGS -->
     <section class="tab-panel" id="tab-settings">
       <div class="panel-header">
@@ -598,6 +868,20 @@
           <p class="setting-hint" id="offline-status">Checking network status...</p>
           <p class="setting-hint">Install SchoolHeat and open it online once so its app files are saved on this device. Sync over Wi-Fi with the laptop bridge, or use Bluetooth without joining the ESP32 Wi-Fi. Readings are stored on this device and are not shared automatically with other devices.</p>
           <button class="btn-secondary" id="install-app-button" type="button" style="width: 100%; margin-top: 10px;">Install SchoolHeat</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="glass-card">
+          <h4 class="settings-section-title">Language</h4>
+          <p class="setting-hint">Choose a language for translated SchoolHeat labels and the About page. Sensor names and some technical messages remain in English.</p>
+          <label for="setting-language">App language</label>
+          <select id="setting-language" class="input-field" style="margin-top: 8px;">
+            <option value="en">English</option>
+            <option value="tl">Tagalog</option>
+            <option value="ceb">Bisaya</option>
+            <option value="war">Waray</option>
+          </select>
         </div>
       </div>
 
@@ -644,11 +928,11 @@
         </div>
         <div class="glass-card setting-item">
           <div class="setting-info">
-            <h4>Dark Mode</h4>
-            <p>Enable dark theme for better visibility</p>
+            <h4>Midnight Thermal Theme</h4>
+            <p>Use the SchoolHeat environmental intelligence dark interface</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="setting-darkmode">
+            <input type="checkbox" id="setting-darkmode" checked>
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -687,7 +971,12 @@
         </div>
       </div>
 
-      <div class="settings-group">
+      <div class="settings-group" id="alerts-center">
+        <div class="glass-card alert-history-card">
+          <h4 class="settings-section-title">Heat Alert Activity</h4>
+          <p class="setting-hint">This list shows recorded Hinga/Hinto readings, not confirmed notifications. SchoolHeat does not keep per-reading delivery receipts in this browser.</p>
+          <div class="alert-history-list" id="alert-history-list"></div>
+        </div>
         <div class="glass-card">
           <h4 class="settings-section-title">Alert Notifications</h4>
           <label for="setting-sms-numbers">SMS recipient numbers (Philippine mobile numbers; up to 5)</label>
@@ -739,32 +1028,65 @@
 
   </main>
 
-  <nav class="bottom-nav" id="bottom-nav">
-    <button class="nav-btn active" data-tab="dashboard" onclick="app.switchTab('dashboard')">
+  <nav class="bottom-nav" id="bottom-nav" aria-label="Primary navigation">
+    <div class="sidebar-brand">
+      <span class="sidebar-brand-mark" aria-hidden="true">SH</span>
+      <div><span class="sidebar-brand-kicker">THERMAL INTELLIGENCE</span><strong>SchoolHeat</strong></div>
+    </div>
+    <button class="sidebar-collapse-toggle" id="sidebar-collapse-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Collapse sidebar</span>
+    </button>
+    <div class="nav-section-label">OVERVIEW</div>
+    <button class="nav-btn active" data-tab="dashboard" data-nav-target="dashboard" aria-current="page" onclick="app.switchTab('dashboard')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      <span>Dashboard</span>
+      <span>Overview</span>
     </button>
-    <button class="nav-btn" data-tab="monitor" onclick="app.switchTab('monitor')">
+    <div class="nav-section-label">FIELD OPERATIONS</div>
+    <button class="nav-btn" data-tab="monitor" data-nav-target="monitor" onclick="app.switchTab('monitor')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-      <span>Monitor</span>
+      <span>Live Monitoring</span>
     </button>
-    <button class="nav-btn" data-tab="history" onclick="app.switchTab('history')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-      <span>History</span>
-    </button>
-    <button class="nav-btn" data-tab="forecast" onclick="app.switchTab('forecast')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19c0-1.7-1.3-3-3-3c-1.1 0-2.1.6-2.6 1.5L9 14.5c-.5-.9-1.5-1.5-2.6-1.5c-1.7 0-3 1.3-3 3"/><path d="M22 19c0-1.7-1.3-3-3-3c-1.1 0-2.1.6-2.6 1.5L13.5 14.5c-.5-.9-1.5-1.5-2.6-1.5c-1.7 0-3 1.3-3 3"/><path d="M2 19c0-1.7 1.3-3 3-3c1.1 0 2.1.6 2.6 1.5L10.5 14.5c.5-.9 1.5-1.5 2.6-1.5c1.7 0 3 1.3 3 3"/></svg>
-      <span>Forecast</span>
-    </button>
-    <button class="nav-btn" data-tab="map" onclick="app.switchTab('map')">
+    <button class="nav-btn" data-tab="map" data-nav-target="map" onclick="app.switchTab('map')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 21 18 21 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-      <span>Map</span>
+      <span>School Map</span>
     </button>
-    <button class="nav-btn" data-tab="settings" onclick="app.switchTab('settings')">
+    <button class="nav-btn" data-tab="monitor" data-nav-target="devices" onclick="app.navigateTo('monitor','devices','device-intelligence')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 21h8M12 19v2M7 10h10M7 14h5"/></svg>
+      <span>Device Management</span>
+    </button>
+    <div class="nav-section-label">INTELLIGENCE</div>
+    <button class="nav-btn" data-tab="history" data-nav-target="history" onclick="app.switchTab('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      <span>Historical Data</span>
+    </button>
+    <button class="nav-btn" data-tab="history" data-nav-target="analytics" onclick="app.navigateTo('history','analytics','history-analytics')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h17"/><path d="m7 15 4-4 3 3 6-7"/></svg>
+      <span>Analytics</span>
+    </button>
+    <button class="nav-btn" data-tab="forecast" data-nav-target="forecast" onclick="app.switchTab('forecast')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19c0-1.7-1.3-3-3-3c-1.1 0-2.1.6-2.6 1.5L9 14.5c-.5-.9-1.5-1.5-2.6-1.5c-1.7 0-3 1.3-3 3"/><path d="M22 19c0-1.7-1.3-3-3-3c-1.1 0-2.1.6-2.6 1.5L13.5 14.5c-.5-.9-1.5-1.5-2.6-1.5c-1.7 0-3 1.3-3 3"/><path d="M2 19c0-1.7 1.3-3 3-3c1.1 0 2.1.6 2.6 1.5L10.5 14.5c.5-.9 1.5-1.5 2.6-1.5c1.7 0 3 1.3 3 3"/></svg>
+      <span>Forecasting</span>
+    </button>
+    <div class="nav-section-label">SYSTEM</div>
+    <button class="nav-btn" data-tab="settings" data-nav-target="alerts" onclick="app.navigateTo('settings','alerts','alerts-center')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+      <span>Alerts</span>
+    </button>
+    <button class="nav-btn" data-tab="settings" data-nav-target="settings" onclick="app.switchTab('settings')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       <span>Settings</span>
     </button>
+    <button class="nav-btn hotline-nav-btn" data-tab="hotlines" data-nav-target="hotlines" onclick="app.switchTab('hotlines')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="5"/></svg>
+      <span>Hotlines</span>
+    </button>
+    <div class="nav-section-label">ABOUT</div>
+    <button class="nav-btn" data-tab="about" data-nav-target="about" onclick="app.switchTab('about')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+      <span>About</span>
+    </button>
   </nav>
+  <button class="nav-backdrop" id="nav-backdrop" type="button" aria-label="Close navigation" tabindex="-1" hidden></button>
 
   <footer class="app-footer">
     <div class="footer-text">
@@ -776,6 +1098,7 @@
 </div>
 
 <script src="cloud_config.js"></script>
+<script src="locales.js" defer></script>
 <script src="script.js" defer></script>
 <script>
   if ('serviceWorker' in navigator) {

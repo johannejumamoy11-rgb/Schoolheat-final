@@ -42,11 +42,11 @@ const STUDY_CLASSROOMS = [
 ];
 
 const STATUS_COLORS = {
-  safe: '#10b981',
-  caution: '#f59e0b',
-  danger: '#ef4444',
-  extreme: '#dc2626',
-  nodata: '#6b7280'
+  safe: '#31d69a',
+  caution: '#ffc857',
+  danger: '#ff873d',
+  extreme: '#ff4d5a',
+  nodata: '#8292a7'
 };
 
 const STATUS_LABELS = {
@@ -83,7 +83,7 @@ const SMS_RETRY_DELAY_MS = 5 * 60 * 1000;
 
 class SchoolHeatApp {
   constructor() {
-    const defaultSettings = { firebase: true, browserNotifications: false, pushAlerts: false, smsAlerts: false, smsNumbers: '', outlier: true, spike: true, demoMode: false, tempOffset: 0, humidityOffset: 0, darkMode: false };
+    const defaultSettings = { firebase: true, browserNotifications: false, pushAlerts: false, smsAlerts: false, smsNumbers: '', outlier: true, spike: true, demoMode: false, tempOffset: 0, humidityOffset: 0, darkMode: true, language: 'en' };
     try {
       const storedReadings = JSON.parse(localStorage.getItem('sh_readings') || '[]');
       this.readings = Array.isArray(storedReadings) ? storedReadings : [];
@@ -99,6 +99,13 @@ class SchoolHeatApp {
       this.settings = defaultSettings;
       localStorage.removeItem('sh_settings');
     }
+    if (window.SCHOOLHEAT_I18N?.languages && !window.SCHOOLHEAT_I18N.languages[this.settings.language]) {
+      this.settings.language = 'en';
+    }
+    this.language = this.settings.language;
+    this.localizedTextNodes = new WeakMap();
+    this.localizedAttributes = new WeakMap();
+    this.languageObserver = null;
     this.currentTab = 'dashboard';
     this.forecastChartLoaded = false;
     this.forecastComparisonCache = null;
@@ -134,6 +141,7 @@ class SchoolHeatApp {
     this.populateLocations();
     this.applySettings();
     this.bindEvents();
+    this.setupNavigation();
     this.bindSettingsEvents();
     this.updateAutoReadButton();
     this.startClock();
@@ -248,10 +256,18 @@ class SchoolHeatApp {
 
   startClock() {
     const update = () => {
+      const date = document.getElementById('header-date');
       const el = document.getElementById('header-clock');
+      const now = new Date();
+      if (date) {
+        date.textContent = now.toLocaleDateString(this.getLanguageLocale(), {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        });
+      }
       if (el) {
-        const now = new Date();
-        el.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        el.textContent = now.toLocaleTimeString(this.getLanguageLocale(), { hour: '2-digit', minute: '2-digit', hour12: true });
       }
       this.updateReadingFreshness();
     };
@@ -377,6 +393,41 @@ class SchoolHeatApp {
     window.addEventListener('resize', this._resizeHandler);
   }
 
+  setupNavigation() {
+    const mobileToggle = document.getElementById('mobile-nav-toggle');
+    const collapseToggle = document.getElementById('sidebar-collapse-toggle');
+    const backdrop = document.getElementById('nav-backdrop');
+
+    mobileToggle?.addEventListener('click', () => {
+      this.setMobileNavigationOpen(!document.body.classList.contains('mobile-nav-open'));
+    });
+    backdrop?.addEventListener('click', () => this.setMobileNavigationOpen(false));
+    collapseToggle?.addEventListener('click', () => {
+      const collapsed = document.body.classList.toggle('nav-collapsed');
+      collapseToggle.setAttribute('aria-expanded', String(!collapsed));
+      const labelText = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+      collapseToggle.setAttribute('aria-label', this.translateText(labelText));
+      collapseToggle.title = this.translateText(labelText);
+      const label = collapseToggle.querySelector('span');
+      if (label) label.textContent = labelText;
+    });
+    window.addEventListener('keydown', event => {
+      if (event.key === 'Escape') this.setMobileNavigationOpen(false);
+    });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 760) this.setMobileNavigationOpen(false);
+    });
+  }
+
+  setMobileNavigationOpen(isOpen) {
+    document.body.classList.toggle('mobile-nav-open', isOpen);
+    const mobileToggle = document.getElementById('mobile-nav-toggle');
+    const backdrop = document.getElementById('nav-backdrop');
+    mobileToggle?.setAttribute('aria-expanded', String(isOpen));
+    mobileToggle?.setAttribute('aria-label', this.translateText(isOpen ? 'Close navigation' : 'Open navigation'));
+    if (backdrop) backdrop.hidden = !isOpen;
+  }
+
   setupMapZoomControls() {
     document.getElementById('map-zoom-in')?.addEventListener('click', () => {
       this.setMapZoom(this.mapZoom + 0.25);
@@ -462,6 +513,7 @@ class SchoolHeatApp {
         const tabs = ['dashboard','monitor','history','forecast','map','settings'];
         this.switchTab(tabs[parseInt(e.key) - 1]);
       }
+      if (e.key === '7') this.switchTab('hotlines');
       if (e.key === 'n' || e.key === 'N') {
         this.switchTab('monitor');
         document.getElementById('location-select')?.focus();
@@ -861,9 +913,15 @@ class SchoolHeatApp {
     const calTemp = document.getElementById('cal-temp');
     const calHum = document.getElementById('cal-humidity');
     const smsNumbers = document.getElementById('setting-sms-numbers');
+    const languageSelect = document.getElementById('setting-language');
     if (calTemp) calTemp.addEventListener('change', () => this.saveSettings());
     if (calHum) calHum.addEventListener('change', () => this.saveSettings());
     if (smsNumbers) smsNumbers.addEventListener('change', () => this.saveSettings());
+    if (languageSelect) languageSelect.addEventListener('change', () => {
+      this.settings.language = languageSelect.value;
+      this.applyLanguage(languageSelect.value);
+      this.saveSettings();
+    });
   }
 
   calculateHeatIndex(T, H) {
@@ -2307,9 +2365,40 @@ class SchoolHeatApp {
       }
     }
 
+    this.renderAlertHistory();
     this.checkAlerts();
     this.updateRecentLocations();
     this.updateMonitorGauge();
+  }
+
+  renderAlertHistory() {
+    const list = document.getElementById('alert-history-list');
+    if (!list) return;
+    const riskReadings = this.readings
+      .filter(reading => reading.status === 'danger' || reading.status === 'extreme')
+      .slice(0, 8);
+
+    if (riskReadings.length === 0) {
+      list.innerHTML = '<div class="alert-history-empty">No Hinga or Hinto readings are recorded on this device.</div>';
+      return;
+    }
+
+    list.innerHTML = riskReadings.map(reading => {
+      const label = STATUS_LABELS[reading.status];
+      const source = reading.isDemo ? 'DEMO DATA' : 'RECORDED';
+      return `
+        <div class="alert-history-item ${reading.status}">
+          <span class="alert-history-level">${this.escapeHTML(label)}</span>
+          <div class="alert-history-reading">
+            <strong>${this.escapeHTML(reading.location)}</strong>
+            <span>${this.formatTime(reading.timestamp)} · ${source}</span>
+          </div>
+          <div class="alert-history-value">
+            <strong>${reading.heatIndex.toFixed(1)}°C</strong>
+            <span>Delivery not logged</span>
+          </div>
+        </div>`;
+    }).join('');
   }
 
   animateCounter(el, from, to) {
@@ -3691,6 +3780,7 @@ class SchoolHeatApp {
     const spk = document.getElementById('setting-spike');
     const demo = document.getElementById('setting-demo');
     const darkmode = document.getElementById('setting-darkmode');
+    const language = document.getElementById('setting-language');
     const cTemp = document.getElementById('cal-temp');
     const cHum = document.getElementById('cal-humidity');
     if (fb) fb.checked = this.settings.firebase;
@@ -3702,9 +3792,75 @@ class SchoolHeatApp {
     if (spk) spk.checked = this.settings.spike;
     if (demo) demo.checked = this.settings.demoMode;
     if (darkmode) darkmode.checked = this.settings.darkMode;
+    if (language) language.value = this.settings.language;
     if (cTemp) cTemp.value = this.settings.tempOffset;
     if (cHum) cHum.value = this.settings.humidityOffset;
     this.applyTheme();
+    this.applyLanguage(this.settings.language);
+  }
+
+  getLanguageLocale() {
+    return window.SCHOOLHEAT_I18N?.languages?.[this.language]?.locale || 'en-PH';
+  }
+
+  translateText(text) {
+    const dictionary = window.SCHOOLHEAT_I18N?.translations?.[this.language];
+    return dictionary?.[text] || text;
+  }
+
+  translateNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (!this.localizedTextNodes.has(node)) this.localizedTextNodes.set(node, node.nodeValue);
+      const original = this.localizedTextNodes.get(node) || '';
+      const trimmed = original.trim();
+      if (!trimmed) return;
+      const leading = original.match(/^\s*/)?.[0] || '';
+      const trailing = original.match(/\s*$/)?.[0] || '';
+      node.nodeValue = `${leading}${this.translateText(trimmed)}${trailing}`;
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (['SCRIPT', 'STYLE', 'TEXTAREA'].includes(node.tagName)) return;
+
+    let originalAttributes = this.localizedAttributes.get(node);
+    if (!originalAttributes) {
+      originalAttributes = new Map();
+      this.localizedAttributes.set(node, originalAttributes);
+    }
+    ['aria-label', 'aria-description', 'placeholder', 'title', 'alt'].forEach(name => {
+      if (!node.hasAttribute(name)) return;
+      if (!originalAttributes.has(name)) originalAttributes.set(name, node.getAttribute(name));
+      node.setAttribute(name, this.translateText(originalAttributes.get(name)));
+    });
+    Array.from(node.childNodes).forEach(child => this.translateNode(child));
+  }
+
+  applyLanguage(language) {
+    const catalog = window.SCHOOLHEAT_I18N;
+    if (!catalog) {
+      console.error('SchoolHeat language data did not load.');
+      return;
+    }
+    const supportedLanguages = catalog.languages || {};
+    const selectedLanguage = supportedLanguages[language] ? language : 'en';
+    this.language = selectedLanguage;
+    this.settings.language = selectedLanguage;
+    const languageSelect = document.getElementById('setting-language');
+    if (languageSelect) languageSelect.value = selectedLanguage;
+    document.documentElement.lang = supportedLanguages[selectedLanguage].htmlLang;
+
+    const root = document.getElementById('app');
+    if (!root) return;
+    this.translateNode(root);
+
+    if (!this.languageObserver) {
+      this.languageObserver = new MutationObserver(records => {
+        records.forEach(record => {
+          record.addedNodes.forEach(node => this.translateNode(node));
+        });
+      });
+      this.languageObserver.observe(root, { childList: true, subtree: true });
+    }
   }
 
   saveSettings() {
@@ -3719,7 +3875,8 @@ class SchoolHeatApp {
       demoMode: document.getElementById('setting-demo')?.checked ?? false,
       darkMode: document.getElementById('setting-darkmode')?.checked ?? false,
       tempOffset: parseFloat(document.getElementById('cal-temp')?.value) || 0,
-      humidityOffset: parseFloat(document.getElementById('cal-humidity')?.value) || 0
+      humidityOffset: parseFloat(document.getElementById('cal-humidity')?.value) || 0,
+      language: document.getElementById('setting-language')?.value || this.language || 'en'
     };
     localStorage.setItem('sh_settings', JSON.stringify(this.settings));
     this.toast('Settings saved', 'success');
@@ -3864,14 +4021,26 @@ class SchoolHeatApp {
     URL.revokeObjectURL(url);
   }
 
-  switchTab(tabId) {
+  navigateTo(tabId, navTarget, sectionId) {
+    this.switchTab(tabId, navTarget, false);
+    window.setTimeout(() => {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  }
+
+  switchTab(tabId, navTarget = tabId, scrollToTop = true) {
     if (!document.getElementById('tab-' + tabId)) return;
     this.currentTab = tabId;
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('tab-' + tabId)?.classList.add('active');
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`.nav-btn[data-tab="${tabId}"]`)?.classList.add('active');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.querySelectorAll('.nav-btn').forEach(button => {
+      const active = (button.dataset.navTarget || button.dataset.tab) === navTarget;
+      button.classList.toggle('active', active);
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    this.setMobileNavigationOpen(false);
+    if (scrollToTop) window.scrollTo({ top: 0, behavior: 'smooth' });
 
     if (tabId === 'history') {
       setTimeout(() => {
@@ -3907,6 +4076,7 @@ class SchoolHeatApp {
   toast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
+    message = this.translateText(message);
     const icons = {
       success: '<svg class="toast-icon success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
       error: '<svg class="toast-icon error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
@@ -3958,10 +4128,10 @@ class SchoolHeatApp {
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (this.settings.darkMode) {
       document.documentElement.setAttribute('data-theme', 'dark');
-      themeColor?.setAttribute('content', '#0a0a14');
+      themeColor?.setAttribute('content', '#080d18');
     } else {
-      document.documentElement.removeAttribute('data-theme');
-      themeColor?.setAttribute('content', '#f3f6fb');
+      document.documentElement.setAttribute('data-theme', 'light');
+      themeColor?.setAttribute('content', '#f3f6fa');
     }
   }
 

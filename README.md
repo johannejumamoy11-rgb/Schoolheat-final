@@ -9,6 +9,26 @@ offline startup. Readings and settings are saved in that browser's local
 storage, so each device has its own local copy; offline changes do not
 automatically sync between devices.
 
+## SchoolHeat 2.0 interface
+
+The interface uses the Midnight Thermal Intelligence theme, with a collapsible
+desktop navigation rail and a mobile navigation drawer. The theme can be
+changed in Settings. The About tab explains SchoolHeat's purpose, workflow,
+the DepEd 4H heat-index bands, data limits, and heat-safety guardrails. It also
+links to the Sensor Monitor, Campus Map, and Hotlines. This visual update does
+not change heat-index calculations, stored readings, sensor communication, or
+forecast evaluation.
+Reading freshness describes the age of saved data; it is not proof that a
+sensor is currently connected. Analytics, alert activity, and device
+management navigation open the existing charts, recorded risk readings, and
+sensor sync controls. The alert activity list is not a notification-delivery
+receipt log.
+
+The Language setting offers English, Tagalog, Bisaya (Cebuano), and Waray. It
+translates the navigation, common Monitor, History, Map, and Hotlines labels,
+selected safety guidance, and the About page. Sensor/location names and some
+detailed technical messages remain in English.
+
 In **History**, choose a `.csv` or `.xlsx` file to import readings. Include
 timestamp (or date), temperature, and humidity columns; location is optional
 and defaults to the selected monitor location. The SchoolHeat CSV export
@@ -185,6 +205,12 @@ including test messages. CLOUDSMS requires a configured Sender ID; its public
 network list does not explicitly confirm TNT, so verify route and sender
 approval before relying on delivery. No local bridge is needed for SMS (the
 bridge remains optional for ESP32 Wi-Fi sync).
+
+The **Hotlines** tab provides a one-tap link to the Philippine emergency
+hotline (911) and basic heat-distress guidance. Mahaplag-specific school and
+responder contacts are intentionally not listed until the school verifies
+them. SchoolHeat is not an emergency dispatch or medical service; SMS alerts
+do not contact emergency responders.
 
 The app's cached offline shell does not make CLOUDSMS available offline:
 delivery needs internet. If internet is unavailable, up to 20 pending SMS are
