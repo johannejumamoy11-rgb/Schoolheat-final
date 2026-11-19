@@ -1329,7 +1329,7 @@ class SchoolHeatApp {
 
   cancelPendingSmsQueue() {
     if (this.smsSendInProgress) {
-      this.toast('An SMS attempt is already in progress and cannot be cancelled. Check Infobip message history before trying again.', 'warning');
+      this.toast('An SMS attempt is already in progress and cannot be cancelled. Check CLOUDSMS message activity before trying again.', 'warning');
       return;
     }
 
@@ -1350,7 +1350,7 @@ class SchoolHeatApp {
     const alertLabel = `${alertCount} queued SMS alert${alertCount === 1 ? '' : 's'}`;
     if (!confirm(`Cancel ${alertLabel} on this device? Saved recipient numbers and SMS settings will stay unchanged.`)) return;
     if (this.smsSendInProgress) {
-      this.toast('An SMS attempt started before the queue could be cancelled. Check Infobip message history before trying again.', 'warning');
+      this.toast('An SMS attempt started before the queue could be cancelled. Check CLOUDSMS message activity before trying again.', 'warning');
       return;
     }
 
@@ -1441,9 +1441,9 @@ class SchoolHeatApp {
       const sent = Number(result.sent) || 0;
       const failed = Number(result.failed) || 0;
       if (sent) {
-        this.toast(`Infobip accepted SMS for ${sent} recipient${sent === 1 ? '' : 's'}${failed ? `; ${failed} failed` : ''}. Check Infobip for delivery status.`, failed ? 'warning' : 'success');
+        this.toast(`CLOUDSMS accepted SMS for ${sent} recipient${sent === 1 ? '' : 's'}${failed ? `; ${failed} failed` : ''}. Check CLOUDSMS message activity for delivery status.`, failed ? 'warning' : 'success');
       } else {
-        this.toast('SMS was not accepted by Infobip.', 'warning');
+        this.toast('SMS was not accepted by CLOUDSMS.', 'warning');
       }
       if (queue.length) this.scheduleSmsRetry();
     } catch (error) {
