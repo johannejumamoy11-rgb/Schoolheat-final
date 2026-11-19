@@ -19,10 +19,10 @@ links to the Sensor Monitor, Campus Map, and Hotlines. This visual update does
 not change heat-index calculations, stored readings, sensor communication, or
 forecast evaluation.
 Reading freshness describes the age of saved data; it is not proof that a
-sensor is currently connected. Analytics, alert activity, and device
-management navigation open the existing charts, recorded risk readings, and
-sensor sync controls. The alert activity list is not a notification-delivery
-receipt log.
+sensor is currently connected. Each navigation item now opens one distinct
+page: device sync is part of Sensor Monitor, analytics stays with Reading
+History, and alert controls are grouped under Settings. The alert activity
+list shows recorded risk readings, not notification-delivery receipts.
 
 The Language setting offers English, Tagalog, Bisaya (Cebuano), and Waray. It
 translates the navigation, common Monitor, History, Map, and Hotlines labels,

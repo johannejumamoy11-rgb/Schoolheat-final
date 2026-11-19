@@ -509,11 +509,8 @@ class SchoolHeatApp {
     document.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLElement &&
           (e.target.matches('input, select, textarea') || e.target.isContentEditable)) return;
-      if (e.key >= '1' && e.key <= '6') {
-        const tabs = ['dashboard','monitor','history','forecast','map','settings'];
-        this.switchTab(tabs[parseInt(e.key) - 1]);
-      }
-      if (e.key === '7') this.switchTab('hotlines');
+      const tabShortcuts = ['dashboard', 'monitor', 'map', 'history', 'forecast', 'settings', 'hotlines', 'about'];
+      if (/^[1-8]$/.test(e.key)) this.switchTab(tabShortcuts[Number(e.key) - 1]);
       if (e.key === 'n' || e.key === 'N') {
         this.switchTab('monitor');
         document.getElementById('location-select')?.focus();
@@ -4021,20 +4018,13 @@ class SchoolHeatApp {
     URL.revokeObjectURL(url);
   }
 
-  navigateTo(tabId, navTarget, sectionId) {
-    this.switchTab(tabId, navTarget, false);
-    window.setTimeout(() => {
-      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
-  }
-
-  switchTab(tabId, navTarget = tabId, scrollToTop = true) {
+  switchTab(tabId, scrollToTop = true) {
     if (!document.getElementById('tab-' + tabId)) return;
     this.currentTab = tabId;
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('tab-' + tabId)?.classList.add('active');
     document.querySelectorAll('.nav-btn').forEach(button => {
-      const active = (button.dataset.navTarget || button.dataset.tab) === navTarget;
+      const active = button.dataset.tab === tabId;
       button.classList.toggle('active', active);
       if (active) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
