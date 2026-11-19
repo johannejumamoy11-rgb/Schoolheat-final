@@ -3695,3 +3695,121 @@ html[data-theme="light"] #tab-dashboard .status-card {
   .about-purpose-card { grid-template-columns: 1fr; }
   .about-principles-grid { grid-template-columns: 1fr; }
 }
+
+:root,
+html[data-theme="dark"] {
+  --brand-teal: #70cfc0;
+  --brand-coral: #ec8966;
+  --brand-amber: #ffd18d;
+  --accent-blue: var(--brand-teal);
+  --accent-purple: var(--brand-coral);
+  --accent-cyan: var(--brand-teal);
+  --accent-pink: var(--brand-amber);
+  --border-hover: rgba(112, 207, 192, 0.32);
+  --shadow-glow: 0 0 34px rgba(112, 207, 192, 0.12);
+}
+
+html[data-theme="light"] {
+  --brand-teal: #147c73;
+  --brand-coral: #b84f37;
+  --brand-amber: #97641c;
+  --accent-blue: var(--brand-teal);
+  --accent-purple: var(--brand-coral);
+  --accent-cyan: var(--brand-teal);
+  --accent-pink: var(--brand-amber);
+  --border-hover: rgba(20, 124, 115, 0.32);
+  --shadow-glow: 0 0 34px rgba(20, 124, 115, 0.12);
+}
+
+body {
+  background:
+    radial-gradient(ellipse at 5% 0%, color-mix(in srgb, var(--brand-teal) 10%, transparent), transparent 32rem),
+    radial-gradient(ellipse at 96% 28%, color-mix(in srgb, var(--brand-coral) 7%, transparent), transparent 27rem),
+    var(--bg-primary);
+}
+
+.panel-header::before {
+  background: linear-gradient(180deg, var(--brand-teal), var(--brand-coral));
+}
+
+.dashboard-eyebrow { color: var(--brand-coral); }
+.sidebar-brand-mark {
+  border-color: color-mix(in srgb, var(--brand-teal) 38%, var(--border));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--brand-teal) 18%, transparent), color-mix(in srgb, var(--brand-coral) 14%, transparent));
+  color: var(--brand-amber);
+}
+.nav-section-label { color: color-mix(in srgb, var(--brand-amber) 62%, var(--text-muted)); }
+.btn-text { color: var(--brand-teal); }
+
+.glass-card:not(.latest-reading) {
+  border-color: color-mix(in srgb, var(--brand-teal) 14%, var(--border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--brand-teal) 5%, var(--bg-card)),
+    var(--bg-card) 54%,
+    color-mix(in srgb, var(--brand-coral) 4%, var(--bg-card))
+  );
+}
+.glass-card:not(.latest-reading):hover {
+  border-color: color-mix(in srgb, var(--brand-teal) 30%, var(--border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--brand-teal) 8%, var(--bg-card-hover)),
+    var(--bg-card-hover) 54%,
+    color-mix(in srgb, var(--brand-coral) 7%, var(--bg-card-hover))
+  );
+}
+
+.activity-item,
+.history-item,
+.monitor-scale,
+.forecast-day,
+.dist-legend-item,
+.map-hint,
+.map-legend,
+.recent-chip,
+.alert-history-item,
+.about-faq-item,
+.about-principle-card {
+  border-color: color-mix(in srgb, var(--brand-teal) 12%, var(--border));
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--brand-teal) 4%, var(--bg-primary)),
+    color-mix(in srgb, var(--brand-coral) 3%, var(--bg-card))
+  );
+}
+
+.card-header h3::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 9px 2px 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-teal), var(--brand-coral));
+  content: '';
+}
+
+#tab-dashboard .dashboard-activity-card { border-top-color: color-mix(in srgb, var(--brand-coral) 48%, var(--border)); }
+#tab-monitor .monitor-gauge-card { border-top-color: color-mix(in srgb, var(--brand-teal) 52%, var(--border)); }
+#tab-monitor .input-card { border-top-color: color-mix(in srgb, var(--brand-coral) 48%, var(--border)); }
+#tab-history .history-upload { border-top-color: color-mix(in srgb, var(--brand-amber) 55%, var(--border)); }
+#tab-history .chart-card { border-top-color: color-mix(in srgb, var(--brand-teal) 42%, var(--border)); }
+#tab-forecast .chart-card { border-top-color: color-mix(in srgb, var(--brand-coral) 48%, var(--border)); }
+#tab-map .map-card { border-top-color: color-mix(in srgb, var(--brand-teal) 48%, var(--border)); }
+#tab-settings .settings-group > .glass-card { border-top-color: color-mix(in srgb, var(--brand-coral) 34%, var(--border)); }
+.settings-section-title::before {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 9px 1px 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-teal), var(--brand-coral));
+  content: '';
+}
+
+html[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse at 5% 0%, color-mix(in srgb, var(--brand-teal) 8%, transparent), transparent 31rem),
+    radial-gradient(ellipse at 96% 28%, color-mix(in srgb, var(--brand-coral) 5%, transparent), transparent 26rem),
+    var(--bg-primary);
+}
