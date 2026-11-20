@@ -117,9 +117,6 @@ class SchoolHeatApp {
     this.trendActiveIndex = null;
     this.distributionChartLoaded = false;
     this.mapZoom = 1;
-    this.replayRows = [];
-    this.replayIndex = 0;
-    this.replayTimer = null;
     this.lastDeviceStatus = null;
     this._resizeHandler = null;
     this.autoReadActive = false;
@@ -311,11 +308,18 @@ class SchoolHeatApp {
   }
 
   getReadingSourceLabel(reading) {
-    if (!reading) return 'No source information';
-    if (reading.isDemo) return 'DEMO DATA';
-    if (String(reading.id).startsWith('esp32-')) return 'ESP32 DHT22';
-    if (reading.sourceFile) return `IMPORTED · ${String(reading.sourceFile).slice(0, 100)}`;
-    return 'MANUAL ENTRY';
+    if (!reading) return this.translateText('No source information');
+    if (reading.source === 'demo' || reading.isDemo) return this.translateText('DEMO DATA');
+    if (reading.source === 'esp32' || String(reading.id ?? '').startsWith('esp32-')) {
+      return this.translateText('ESP32 DHT22');
+    }
+    if (reading.source === 'imported' || reading.sourceFile) {
+      const sourceFile = String(reading.sourceFile || '').slice(0, 100);
+      const importedLabel = this.translateText('IMPORTED');
+      return sourceFile ? `${importedLabel} · ${sourceFile}` : importedLabel;
+    }
+    if (reading.source === 'manual') return this.translateText('MANUAL ENTRY');
+    return this.translateText('SOURCE NOT RECORDED');
   }
 
   hasValidMeasurement(reading) {
@@ -348,11 +352,16 @@ class SchoolHeatApp {
     const monitorBadge = document.getElementById('monitor-live-badge');
     const monitorText = document.getElementById('monitor-live-text');
     const detail = document.getElementById('reading-freshness');
+    const dashboardBadge = document.getElementById('dashboard-freshness');
 
     if (header) header.className = `header-live ${freshness.state}`;
     if (headerText) headerText.textContent = freshness.label;
     if (monitorBadge) monitorBadge.className = `monitor-live-badge ${freshness.state}`;
     if (monitorText) monitorText.textContent = freshness.label;
+    if (dashboardBadge) {
+      dashboardBadge.className = `dashboard-freshness ${freshness.state}`;
+      dashboardBadge.textContent = freshness.label;
+    }
     if (detail) {
       detail.className = `reading-freshness ${freshness.state}`;
       detail.textContent = freshness.detail;
@@ -367,11 +376,13 @@ class SchoolHeatApp {
     const detail = document.getElementById('heat-guidance-detail');
     if (!card || !level || !title || !detail) return;
 
-    if (!reading) {
+    if (!reading || !this.hasValidMeasurement(reading)) {
       card.className = 'glass-card heat-guidance-card nodata';
-      level.textContent = 'NO DATA';
-      title.textContent = 'Get a reading to see the suggested response';
-      detail.textContent = 'Sync a sensor or enter a reading. Without current data, this app cannot indicate classroom heat conditions.';
+      level.textContent = reading ? 'INVALID DATA' : 'NO DATA';
+      title.textContent = reading ? 'The latest saved reading is incomplete' : 'Get a reading to see the suggested response';
+      detail.textContent = reading
+        ? 'One or more required measurement values are missing or invalid, so no heat classification is shown.'
+        : 'Sync a sensor or enter a reading. Without current data, this app cannot indicate classroom heat conditions.';
       return;
     }
 
@@ -544,23 +555,6 @@ class SchoolHeatApp {
       const button = event.target.closest('[data-delete-reading-index]');
       if (!button) return;
       this.deleteReading(Number(button.dataset.deleteReadingIndex));
-    });
-    document.getElementById('thermal-replay-location')?.addEventListener('change', () => this.renderThermalReplay(true));
-    document.getElementById('thermal-replay-date')?.addEventListener('change', () => this.renderThermalReplay(true));
-    document.getElementById('thermal-replay-compare-date')?.addEventListener('change', () => this.updateThermalReplayDisplay());
-    document.getElementById('thermal-replay-timeline')?.addEventListener('input', event => {
-      this.stopThermalReplay();
-      this.replayIndex = Number(event.target.value) || 0;
-      this.updateThermalReplayDisplay();
-    });
-    document.getElementById('thermal-replay-play')?.addEventListener('click', () => this.toggleThermalReplay());
-    document.getElementById('thermal-replay-previous')?.addEventListener('click', () => this.stepThermalReplay(-1));
-    document.getElementById('thermal-replay-next')?.addEventListener('click', () => this.stepThermalReplay(1));
-    document.getElementById('thermal-replay-speed')?.addEventListener('change', () => {
-      if (this.replayTimer) {
-        this.stopThermalReplay();
-        this.startThermalReplay();
-      }
     });
     document.getElementById('knowledge-ask-button')?.addEventListener('click', () => this.askKnowledgeAssistant());
     document.getElementById('knowledge-question')?.addEventListener('keydown', event => {
@@ -925,8 +919,10 @@ class SchoolHeatApp {
       const calibratedHumidity = Math.max(0, Math.min(100, humidity + this.settings.humidityOffset));
       const heatIndex = this.calculateHeatIndex(calibratedTemp, calibratedHumidity);
       const quality = this.getQualityScore(calibratedTemp, calibratedHumidity);
+      const isDemo = demoIndex >= 0 && ['true', 'yes', '1', 'demo'].includes(String(row[demoIndex] ?? '').trim().toLowerCase());
       readings.push({
         id: `file-${fileId}-${rowIndex}`,
+        source: isDemo ? 'demo' : 'imported',
         location,
         temperature: parseFloat(calibratedTemp.toFixed(1)),
         humidity: parseFloat(calibratedHumidity.toFixed(1)),
@@ -936,7 +932,7 @@ class SchoolHeatApp {
         qualityClass: quality.class,
         timestamp,
         sourceFile,
-        isDemo: demoIndex >= 0 && ['true', 'yes', '1', 'demo'].includes(String(row[demoIndex] ?? '').trim().toLowerCase())
+        isDemo
       });
     });
     if (rows.length > 5001) skipped += rows.length - 5001;
@@ -1099,6 +1095,7 @@ class SchoolHeatApp {
     const quality = this.getQualityScore(calibratedTemp, calibratedHum);
     const reading = {
       id: Date.now(),
+      source: 'manual',
       location: loc,
       temperature: calibratedTemp,
       humidity: calibratedHum,
@@ -1817,6 +1814,7 @@ class SchoolHeatApp {
 
     const reading = {
       id: Date.now(),
+      source: 'demo',
       location: loc.name,
       temperature: parseFloat(temp.toFixed(1)),
       humidity: parseFloat(hum.toFixed(1)),
@@ -2005,6 +2003,7 @@ class SchoolHeatApp {
       const quality = this.getQualityScore(row.temperature, row.humidity);
       imported.push({
         id,
+        source: 'esp32',
         location: typeof row.location === 'string' && row.location ? row.location : fallbackLocation,
         temperature: parseFloat(row.temperature.toFixed(1)),
         humidity: parseFloat(row.humidity.toFixed(1)),
@@ -2374,6 +2373,30 @@ class SchoolHeatApp {
     caveat.textContent = status?.sensorErrors
       ? `${status.sensorErrors} DHT22 read error(s) reported since reboot. Device connectivity, successful transmission, valid readings, and measurement accuracy are different; calibration is not verified.`
       : 'Connectivity, successful transmission, valid sensor readings, and measurement accuracy are different. SchoolHeat cannot verify calibration or accuracy.';
+
+    const dashboardResponse = document.getElementById('dashboard-sensor-response');
+    const dashboardCount = document.getElementById('dashboard-sensor-count');
+    const dashboardSample = document.getElementById('dashboard-sensor-sample');
+    const dashboardLastReading = document.getElementById('dashboard-sensor-last-reading');
+    const dashboardGaps = document.getElementById('dashboard-sensor-gaps');
+    const dashboardDeviceStatus = document.getElementById('dashboard-device-status');
+    const dashboardDeviceDot = document.getElementById('dashboard-device-dot');
+    const lastReading = summary.readings[summary.readings.length - 1];
+    if (dashboardResponse) dashboardResponse.textContent = contact.textContent;
+    if (dashboardCount) dashboardCount.textContent = String(summary.readings.length);
+    if (dashboardSample) dashboardSample.textContent = sample.textContent;
+    if (dashboardLastReading) {
+      dashboardLastReading.textContent = lastReading
+        ? this.formatTime(lastReading.timestamp)
+        : this.translateText('No ESP32 history');
+    }
+    if (dashboardGaps) {
+      dashboardGaps.textContent = summary.readings.length
+        ? String(summary.gapCount)
+        : this.translateText('No ESP32 history');
+    }
+    if (dashboardDeviceStatus) dashboardDeviceStatus.textContent = contact.textContent;
+    if (dashboardDeviceDot) dashboardDeviceDot.className = `dashboard-device-dot ${status ? 'has-response' : 'no-response'}`;
   }
 
   drawMonitorGauge(value) {
@@ -2484,17 +2507,43 @@ class SchoolHeatApp {
     });
   }
 
-  updateDashboard() {
-    const counts = { safe: 0, caution: 0, danger: 0, extreme: 0 };
-    const latestByLoc = {};
+  getLatestReadingsByLocation() {
+    const latestByLoc = new Map();
     this.readings.forEach(r => {
-      if (!latestByLoc[r.location] || new Date(r.timestamp) > new Date(latestByLoc[r.location].timestamp)) {
-        latestByLoc[r.location] = r;
+      const current = latestByLoc.get(r.location);
+      if (!current || new Date(r.timestamp) > new Date(current.timestamp)) {
+        latestByLoc.set(r.location, r);
       }
     });
-    Object.values(latestByLoc).forEach(r => {
-      if (counts[r.status] !== undefined) counts[r.status]++;
+    return latestByLoc;
+  }
+
+  renderDashboardLocationSummary(latestByLoc = this.getLatestReadingsByLocation()) {
+    const locationSummary = document.getElementById('dashboard-location-summary');
+    const mapSummary = document.getElementById('dashboard-map-summary');
+    const savedLocationCount = latestByLoc.size;
+    const mappedLocationCount = LOCATIONS.filter(location => latestByLoc.has(location.name)).length;
+    if (locationSummary) {
+      locationSummary.textContent = `${savedLocationCount} ${this.translateText('locations with saved readings, including demo data; not simultaneous campus coverage.')}`;
+    }
+    if (mapSummary) {
+      mapSummary.textContent = mappedLocationCount
+        ? `${mappedLocationCount} ${this.translateText(mappedLocationCount === 1
+          ? 'mapped location has saved readings, including demo data. Locations without readings remain unclassified.'
+          : 'mapped locations have saved readings, including demo data. Locations without readings remain unclassified.')}`
+        : this.translateText('No saved readings are available for the mapped locations yet.');
+    }
+  }
+
+  updateDashboard() {
+    const counts = { safe: 0, caution: 0, danger: 0, extreme: 0 };
+    const latestByLoc = this.getLatestReadingsByLocation();
+    latestByLoc.forEach(r => {
+      if (!this.hasValidMeasurement(r)) return;
+      const status = this.getStatus(Number(r.heatIndex));
+      if (counts[status] !== undefined) counts[status]++;
     });
+    this.renderDashboardLocationSummary(latestByLoc);
 
     Object.entries(counts).forEach(([status, count]) => {
       const el = document.getElementById('count-' + status);
@@ -2504,7 +2553,11 @@ class SchoolHeatApp {
     const latest = this.readings[0];
     const freshness = this.updateReadingFreshness();
     this.updateHeatGuidance(latest, freshness);
-    if (latest) {
+    const dashboardLastUpdate = document.getElementById('dashboard-last-update');
+    const dashboardLatestLocation = document.getElementById('dashboard-latest-location');
+    if (dashboardLastUpdate) dashboardLastUpdate.textContent = latest ? this.formatTime(latest.timestamp) : 'No reading recorded';
+    if (dashboardLatestLocation) dashboardLatestLocation.textContent = latest ? latest.location : '—';
+    if (latest && this.hasValidMeasurement(latest)) {
       const source = document.getElementById('latest-source');
       if (source) source.textContent = this.getReadingSourceLabel(latest);
       document.getElementById('gauge-value').textContent = latest.heatIndex.toFixed(1);
@@ -2514,12 +2567,13 @@ class SchoolHeatApp {
       document.getElementById('latest-humidity').textContent = latest.humidity.toFixed(1) + '%';
       document.getElementById('latest-hi').textContent = latest.heatIndex.toFixed(1) + '°C';
       const stEl = document.getElementById('latest-status');
-      stEl.textContent = STATUS_LABELS[latest.status];
-      stEl.className = 'status-pill ' + latest.status;
+      const status = this.getStatus(latest.heatIndex);
+      stEl.textContent = STATUS_LABELS[status];
+      stEl.className = 'status-pill ' + status;
       this.drawGauge(latest.heatIndex);
     } else {
       const source = document.getElementById('latest-source');
-      if (source) source.textContent = 'No source information';
+      if (source) source.textContent = latest ? this.getReadingSourceLabel(latest) : 'No source information';
       document.getElementById('gauge-value').textContent = '—';
       document.getElementById('latest-location').textContent = '—';
       document.getElementById('latest-time').textContent = '—';
@@ -2564,6 +2618,154 @@ class SchoolHeatApp {
     this.updateRecentLocations();
     this.updateMonitorGauge();
     this.renderSensorTrust();
+    this.renderDashboardForecast();
+  }
+
+  renderDashboardForecast() {
+    const empty = document.getElementById('dashboard-forecast-empty');
+    const emptyTitle = document.getElementById('dashboard-forecast-empty-title');
+    const emptyDetail = document.getElementById('dashboard-forecast-empty-detail');
+    const content = document.getElementById('dashboard-forecast-content');
+    const canvas = document.getElementById('dashboard-forecast-chart');
+    if (!empty || !content || !canvas) return;
+
+    const forecast = this.buildForecastComparison();
+    const best = forecast ? this.getBestForecastModel(forecast) : null;
+    if (!forecast || !best?.result || !Number.isFinite(best.result.value)) {
+      empty.hidden = false;
+      content.hidden = true;
+      if (emptyTitle) emptyTitle.textContent = this.translateText('Forecast unavailable');
+      if (emptyDetail) {
+        emptyDetail.textContent = this.translateText('At least 12 complete same-location examples from non-demo readings are needed. No prediction is shown until the data supports one.');
+      }
+      canvas.setAttribute('aria-label', 'Forecast unavailable because there is not enough eligible data.');
+      return;
+    }
+
+    const forecastAge = Date.now() - forecast.current.minute * 60000;
+    if (!Number.isFinite(forecastAge) ||
+      forecastAge > STALE_READING_AFTER_MS ||
+      forecastAge < -2 * 60000 ||
+      forecast.date.getTime() <= Date.now()) {
+      empty.hidden = false;
+      content.hidden = true;
+      if (emptyTitle) emptyTitle.textContent = this.translateText('Forecast is not current');
+      if (emptyDetail) {
+        emptyDetail.textContent = this.translateText('The latest eligible same-location reading is too old for a current outlook. No forecast is shown.');
+      }
+      canvas.setAttribute('aria-label', 'A current forecast is unavailable because the latest eligible reading is not recent.');
+      return;
+    }
+
+    empty.hidden = true;
+    content.hidden = false;
+    const status = best.result.status;
+    const value = document.getElementById('dashboard-forecast-value');
+    const statusElement = document.getElementById('dashboard-forecast-status');
+    const model = document.getElementById('dashboard-forecast-model');
+    const time = document.getElementById('dashboard-forecast-time');
+    if (value) value.textContent = `${best.result.value.toFixed(1)}°C`;
+    if (statusElement) {
+      statusElement.textContent = STATUS_LABELS[status] || this.translateText('Unknown');
+      statusElement.className = `status-pill ${status || 'nodata'}`;
+    }
+    if (model) {
+      model.textContent = best.metric
+        ? `${best.label} · MAE ${best.metric.mae.toFixed(1)}°C`
+        : `${best.label} · no validation score`;
+    }
+    if (time) time.textContent = `For ${this.formatTime(forecast.date.toISOString())}`;
+
+    this.drawDashboardForecast(forecast, best.result);
+  }
+
+  drawDashboardForecast(forecast, prediction) {
+    const canvas = document.getElementById('dashboard-forecast-chart');
+    if (!canvas) return;
+    const context = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    if (!context || !rect.width || !rect.height) return;
+
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * ratio);
+    canvas.height = Math.round(rect.height * ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    const width = rect.width;
+    const height = rect.height;
+    const padding = { top: 14, right: 12, bottom: 24, left: 36 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    const points = forecast.history.filter(point =>
+      Number.isFinite(point.minute) && Number.isFinite(point.value));
+    const values = [...points.map(point => point.value), prediction.value];
+    const minimum = Math.min(...values) - 1;
+    const maximum = Math.max(...values) + 1;
+    const valueRange = Math.max(maximum - minimum, 2);
+    const firstMinute = forecast.current.minute - 30;
+    const x = minute => padding.left + ((minute - firstMinute) / 60) * chartWidth;
+    const y = value => padding.top + ((maximum - value) / valueRange) * chartHeight;
+
+    context.clearRect(0, 0, width, height);
+    context.font = '10px Inter, sans-serif';
+    context.textAlign = 'right';
+    context.textBaseline = 'middle';
+    for (let index = 0; index <= 2; index++) {
+      const value = maximum - (valueRange * index / 2);
+      const lineY = y(value);
+      context.strokeStyle = 'rgba(255,255,255,0.1)';
+      context.beginPath();
+      context.moveTo(padding.left, lineY);
+      context.lineTo(width - padding.right, lineY);
+      context.stroke();
+      context.fillStyle = 'rgba(220,232,245,0.62)';
+      context.fillText(`${value.toFixed(0)}°`, padding.left - 7, lineY);
+    }
+
+    const currentPoint = points[points.length - 1] || forecast.current;
+    if (points.length) {
+      context.beginPath();
+      points.forEach((point, index) => {
+        const pointX = x(point.minute);
+        const pointY = y(point.value);
+        if (index === 0) context.moveTo(pointX, pointY);
+        else context.lineTo(pointX, pointY);
+      });
+      context.strokeStyle = '#22d3ee';
+      context.lineWidth = 2.5;
+      context.lineJoin = 'round';
+      context.stroke();
+    }
+
+    context.beginPath();
+    context.setLineDash([5, 4]);
+    context.moveTo(x(currentPoint.minute), y(currentPoint.value));
+    context.lineTo(x(forecast.current.minute + 30), y(prediction.value));
+    context.strokeStyle = '#fb923c';
+    context.lineWidth = 2.5;
+    context.stroke();
+    context.setLineDash([]);
+
+    [
+      { minute: currentPoint.minute, value: currentPoint.value, color: '#22d3ee' },
+      { minute: forecast.current.minute + 30, value: prediction.value, color: '#fb923c' }
+    ].forEach(point => {
+      context.beginPath();
+      context.arc(x(point.minute), y(point.value), 3.5, 0, Math.PI * 2);
+      context.fillStyle = point.color;
+      context.fill();
+    });
+
+    context.textAlign = 'center';
+    context.textBaseline = 'top';
+    context.fillStyle = 'rgba(220,232,245,0.62)';
+    context.fillText('−30 min', padding.left, height - 15);
+    context.fillText('Now', x(forecast.current.minute), height - 15);
+    context.fillText('+30 min', width - padding.right, height - 15);
+    canvas.setAttribute(
+      'aria-label',
+      `Recorded Heat Index is ${forecast.current.value.toFixed(1)} degrees Celsius at ${forecast.location}; the forecast for ${this.formatTime(forecast.date.toISOString())} is ${prediction.value.toFixed(1)} degrees Celsius.`
+    );
   }
 
   renderAlertHistory() {
@@ -2742,7 +2944,6 @@ class SchoolHeatApp {
       this.trendActiveIndex = null;
       this.drawTrendChart();
     }
-    this.renderThermalReplay();
   }
 
   getLocalDateKey(value) {
@@ -2750,240 +2951,6 @@ class SchoolHeatApp {
     if (!Number.isFinite(date.getTime())) return '';
     const pad = number => String(number).padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  }
-
-  getReplayEligibleReadings() {
-    return this.readings.filter(reading =>
-      !reading.isDemo &&
-      typeof reading.location === 'string' &&
-      reading.location.trim() &&
-      Number.isFinite(Date.parse(reading.timestamp)) &&
-      this.hasValidMeasurement(reading)
-    );
-  }
-
-  renderThermalReplay(resetIndex = false) {
-    const locationSelect = document.getElementById('thermal-replay-location');
-    const dateSelect = document.getElementById('thermal-replay-date');
-    const compareSelect = document.getElementById('thermal-replay-compare-date');
-    const timeline = document.getElementById('thermal-replay-timeline');
-    if (!locationSelect || !dateSelect || !compareSelect || !timeline) return;
-
-    const previousLocation = locationSelect.value;
-    const previousDate = dateSelect.value;
-    const previousCompareDate = compareSelect.value;
-    const previousReadingId = this.replayRows[this.replayIndex]?.id;
-    this.stopThermalReplay();
-
-    const readings = this.getReplayEligibleReadings()
-      .slice()
-      .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
-    const locations = [...new Set(readings.map(reading => reading.location))].sort((a, b) => a.localeCompare(b));
-    const setOptions = (select, options, selected, emptyLabel) => {
-      select.replaceChildren();
-      if (!options.length) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = emptyLabel;
-        select.appendChild(option);
-        select.value = '';
-        return;
-      }
-      options.forEach(item => {
-        const option = document.createElement('option');
-        option.value = item.value;
-        option.textContent = item.label;
-        select.appendChild(option);
-      });
-      select.value = options.some(item => item.value === selected) ? selected : options[0].value;
-    };
-
-    const latestLocation = readings[readings.length - 1]?.location || '';
-    setOptions(
-      locationSelect,
-      locations.map(location => ({ value: location, label: location })),
-      locations.includes(previousLocation) ? previousLocation : latestLocation,
-      this.translateText('No recorded locations')
-    );
-    locationSelect.disabled = locations.length === 0;
-
-    const location = locationSelect.value;
-    const dateKeys = [...new Set(
-      readings
-        .filter(reading => reading.location === location)
-        .map(reading => this.getLocalDateKey(reading.timestamp))
-        .filter(Boolean)
-    )].sort((a, b) => b.localeCompare(a));
-    const dateOptions = dateKeys.map(dateKey => ({
-      value: dateKey,
-      label: new Date(`${dateKey}T12:00:00`).toLocaleDateString(this.getLanguageLocale(), {
-        year: 'numeric', month: 'short', day: 'numeric'
-      })
-    }));
-    setOptions(dateSelect, dateOptions, previousDate, this.translateText('No recorded dates'));
-    dateSelect.disabled = dateKeys.length === 0;
-
-    const selectedDate = dateSelect.value;
-    const comparisonDates = dateOptions.filter(option => option.value !== selectedDate);
-    setOptions(compareSelect, comparisonDates, previousCompareDate, this.translateText('No comparison date'));
-    compareSelect.disabled = comparisonDates.length === 0;
-
-    this.replayRows = readings.filter(reading =>
-      reading.location === location &&
-      this.getLocalDateKey(reading.timestamp) === selectedDate
-    );
-    if (resetIndex) {
-      this.replayIndex = 0;
-    } else if (previousReadingId !== undefined) {
-      const preservedIndex = this.replayRows.findIndex(reading => String(reading.id) === String(previousReadingId));
-      this.replayIndex = preservedIndex >= 0
-        ? preservedIndex
-        : Math.min(this.replayIndex, Math.max(0, this.replayRows.length - 1));
-    } else {
-      this.replayIndex = 0;
-    }
-
-    timeline.min = '0';
-    timeline.max = String(Math.max(0, this.replayRows.length - 1));
-    timeline.value = String(this.replayIndex);
-    timeline.disabled = this.replayRows.length < 2;
-    const previousButton = document.getElementById('thermal-replay-previous');
-    const nextButton = document.getElementById('thermal-replay-next');
-    const playButton = document.getElementById('thermal-replay-play');
-    if (previousButton) previousButton.disabled = this.replayRows.length < 2;
-    if (nextButton) nextButton.disabled = this.replayRows.length < 2;
-    if (playButton) playButton.disabled = this.replayRows.length < 2;
-
-    const empty = document.getElementById('thermal-replay-empty');
-    if (empty) {
-      empty.hidden = this.replayRows.length > 0;
-      empty.textContent = this.translateText(readings.length
-        ? 'No non-demo readings are available for this location and date.'
-        : 'No non-demo readings are available for replay. Sync a sensor or import verified measurements first.');
-    }
-    this.updateThermalReplayDisplay();
-  }
-
-  updateThermalReplayDisplay() {
-    const panel = document.getElementById('thermal-replay-reading');
-    const timeline = document.getElementById('thermal-replay-timeline');
-    const position = document.getElementById('thermal-replay-position');
-    if (!panel || !timeline || !position) return;
-    if (!this.replayRows.length) {
-      panel.hidden = true;
-      position.textContent = this.translateText('No readings');
-      this.updateThermalReplayComparison(null);
-      return;
-    }
-
-    this.replayIndex = Math.max(0, Math.min(this.replayRows.length - 1, this.replayIndex));
-    const reading = this.replayRows[this.replayIndex];
-    timeline.value = String(this.replayIndex);
-    position.textContent = `${this.replayIndex + 1} / ${this.replayRows.length}`;
-    panel.hidden = false;
-    document.getElementById('thermal-replay-timestamp').textContent = this.formatTime(reading.timestamp);
-    document.getElementById('thermal-replay-source').textContent = this.getReadingSourceLabel(reading);
-    document.getElementById('thermal-replay-temperature').textContent = `${Number(reading.temperature).toFixed(1)}°C`;
-    document.getElementById('thermal-replay-humidity').textContent = `${Number(reading.humidity).toFixed(1)}%`;
-    const heatIndex = Number(reading.heatIndex);
-    const status = this.getStatus(heatIndex);
-    document.getElementById('thermal-replay-heat-index').textContent = `${heatIndex.toFixed(1)}°C`;
-    document.getElementById('thermal-replay-status').textContent = this.translateText(STATUS_LABELS[status]);
-
-    const gap = document.getElementById('thermal-replay-gap');
-    const previous = this.replayRows[this.replayIndex - 1];
-    if (gap) {
-      if (!previous) {
-        gap.textContent = this.translateText('First stored reading for this date. No earlier value is inferred.');
-      } else {
-        const elapsedMinutes = Math.max(0, Math.round(
-          (Date.parse(reading.timestamp) - Date.parse(previous.timestamp)) / 60000
-        ));
-        const elapsed = elapsedMinutes < 60
-          ? `${elapsedMinutes} min`
-          : `${Math.floor(elapsedMinutes / 60)} hr ${elapsedMinutes % 60} min`;
-        gap.textContent = `${this.translateText('Time since previous stored reading:')} ${elapsed}. ${this.translateText('No missing values are interpolated.')}`;
-      }
-    }
-    this.updateThermalReplayComparison(reading);
-  }
-
-  updateThermalReplayComparison(reading) {
-    const output = document.getElementById('thermal-replay-comparison');
-    if (!output) return;
-    const compareDate = document.getElementById('thermal-replay-compare-date')?.value;
-    const location = document.getElementById('thermal-replay-location')?.value;
-    if (!reading || !compareDate || !location) {
-      output.textContent = this.translateText('Choose another recorded date to compare readings.');
-      return;
-    }
-
-    const currentTime = new Date(reading.timestamp);
-    const currentMinute = currentTime.getHours() * 60 + currentTime.getMinutes();
-    const comparisonReadings = this.getReplayEligibleReadings()
-      .filter(candidate =>
-        candidate.location === location &&
-        this.getLocalDateKey(candidate.timestamp) === compareDate
-      );
-    if (!comparisonReadings.length) {
-      output.textContent = this.translateText('No stored measurements are available on the comparison date.');
-      return;
-    }
-
-    const nearest = comparisonReadings.reduce((best, candidate) => {
-      const date = new Date(candidate.timestamp);
-      const minute = date.getHours() * 60 + date.getMinutes();
-      const difference = Math.abs(minute - currentMinute);
-      const distance = Math.min(difference, 1440 - difference);
-      return !best || distance < best.distance ? { reading: candidate, distance } : best;
-    }, null);
-    const difference = Number(reading.heatIndex) - Number(nearest.reading.heatIndex);
-    const direction = difference > 0 ? 'higher' : difference < 0 ? 'lower' : 'the same';
-    output.textContent = `Nearest stored reading on ${this.formatDate(nearest.reading.timestamp)} was ${nearest.reading.heatIndex.toFixed(1)}°C at ${this.formatClockTime(nearest.reading.timestamp)}. This replay point is ${Math.abs(difference).toFixed(1)}°C ${direction}; comparison uses actual records, not interpolation.`;
-  }
-
-  toggleThermalReplay() {
-    if (this.replayTimer) {
-      this.stopThermalReplay();
-      return;
-    }
-    if (this.replayRows.length < 2) return;
-    if (this.replayIndex >= this.replayRows.length - 1) {
-      this.replayIndex = 0;
-      this.updateThermalReplayDisplay();
-    }
-    this.startThermalReplay();
-  }
-
-  startThermalReplay() {
-    if (this.replayTimer || this.replayRows.length < 2) return;
-    const speed = Number(document.getElementById('thermal-replay-speed')?.value) || 1;
-    const interval = Math.max(250, 1000 / speed);
-    const button = document.getElementById('thermal-replay-play');
-    if (button) button.textContent = this.translateText('Pause');
-    this.replayTimer = setInterval(() => {
-      if (this.replayIndex >= this.replayRows.length - 1) {
-        this.stopThermalReplay();
-        return;
-      }
-      this.replayIndex++;
-      this.updateThermalReplayDisplay();
-      if (this.replayIndex >= this.replayRows.length - 1) this.stopThermalReplay();
-    }, interval);
-  }
-
-  stopThermalReplay() {
-    if (this.replayTimer) clearInterval(this.replayTimer);
-    this.replayTimer = null;
-    const button = document.getElementById('thermal-replay-play');
-    if (button) button.textContent = this.translateText('Play');
-  }
-
-  stepThermalReplay(direction) {
-    if (!this.replayRows.length) return;
-    this.stopThermalReplay();
-    this.replayIndex = Math.max(0, Math.min(this.replayRows.length - 1, this.replayIndex + direction));
-    this.updateThermalReplayDisplay();
   }
 
   askKnowledgeAssistant() {
@@ -2999,7 +2966,14 @@ class SchoolHeatApp {
 
     const knownLocations = [...LOCATIONS.map(location => location.name), ...STUDY_CLASSROOMS];
     const location = knownLocations.find(name => query.includes(name.toLowerCase()));
-    const readings = this.getReplayEligibleReadings()
+    const readings = this.readings
+      .filter(reading =>
+        !reading.isDemo &&
+        typeof reading.location === 'string' &&
+        reading.location.trim() &&
+        Number.isFinite(Date.parse(reading.timestamp)) &&
+        this.hasValidMeasurement(reading)
+      )
       .filter(reading => !String(reading.id).startsWith('demo-'))
       .slice()
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
@@ -4487,8 +4461,9 @@ class SchoolHeatApp {
       });
       this.languageObserver.observe(root, { childList: true, subtree: true });
     }
+    this.renderDashboardLocationSummary();
     this.renderSensorTrust();
-    this.renderThermalReplay();
+    this.renderDashboardForecast();
   }
 
   saveSettings() {
@@ -4534,6 +4509,7 @@ class SchoolHeatApp {
         const quality = this.getQualityScore(temp, hum);
         demo.push({
           id: ts.getTime() + i,
+          source: 'demo',
           location: loc,
           temperature: parseFloat(temp.toFixed(1)),
           humidity: parseFloat(hum.toFixed(1)),
@@ -4660,6 +4636,28 @@ class SchoolHeatApp {
     URL.revokeObjectURL(url);
   }
 
+  openHistoryAnalytics() {
+    this.switchTab('history', false);
+    requestAnimationFrame(() => {
+      document.getElementById('history-analytics')?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+      });
+    });
+  }
+
+  openKnowledgeAssistant() {
+    this.switchTab('about', false);
+    requestAnimationFrame(() => {
+      const section = document.querySelector('.knowledge-assistant-section');
+      section?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+      });
+      window.setTimeout(() => document.getElementById('knowledge-question')?.focus(), 150);
+    });
+  }
+
   switchTab(tabId, scrollToTop = true) {
     if (!document.getElementById('tab-' + tabId)) return;
     this.currentTab = tabId;
@@ -4699,6 +4697,9 @@ class SchoolHeatApp {
           img.src = 'assets/campus-map.jpg';
         }
       }, 100);
+    }
+    if (tabId === 'dashboard') {
+      this.renderDashboardForecast();
     }
     if (tabId === 'monitor') {
       this.updateRecentLocations();

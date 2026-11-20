@@ -34,12 +34,9 @@ detailed technical messages remain in English.
 The Monitor includes a Sensor Trust summary of saved ESP32 records, reported
 device health, and observed logging gaps. It does not claim that a device is
 currently connected or calibrated, and it does not calculate an accuracy
-percentage. History includes Thermal Replay, which steps through actual
-non-demo readings and compares them with the nearest stored reading on another
-date; missing values are never interpolated. The About page's Ask SchoolHeat
-assistant answers a fixed set of questions locally from saved non-demo records
-and documented app behavior. It does not send questions or readings to an AI
-service.
+percentage. The About page's Ask SchoolHeat assistant answers a fixed set of
+questions locally from saved non-demo records and documented app behavior. It
+does not send questions or readings to an AI service.
 
 In **History**, choose a `.csv` or `.xlsx` file to import readings. Include
 timestamp (or date), temperature, and humidity columns; location is optional
@@ -70,6 +67,9 @@ about accuracy. SchoolHeat CSV exports preserve the demo marker when
 re-imported. Older saved demo readings without the demo marker cannot be
 identified automatically; clear pre-existing demo history before using its
 validation metrics.
+New readings record whether they came from manual entry, an ESP32/DHT22, an
+imported file, or demo data. Older readings without a source marker are shown as
+**SOURCE NOT RECORDED** rather than being assumed to be manual entries.
 
 The dashboard uses the DepEd 4H labels: Hayo (<27°C), Hinay (27–32°C), Hinga
 (33–41°C), and Hinto (42°C or higher). The 29 existing campus sites remain
@@ -89,6 +89,14 @@ The campus view remains a two-dimensional map with the existing mapped
 coordinates. A verified 3D campus model, approved student comfort-feedback
 collection, and PDF reporting are not included; no geometry or feedback data
 is invented to simulate those features.
+
+The dashboard links to the interactive map, forecast, history analytics, and
+the local Ask SchoolHeat assistant. Its forecast preview uses the same
+non-demo, same-location eligibility rules as the Forecast tab and remains
+unavailable until enough complete examples are available; it is also hidden
+when the latest eligible source reading is stale. Device health shows the last
+response and saved ESP32/DHT22 history; it does not claim that a device is
+currently connected or calibrated.
 
 Offline mode does not provide internet services: Firebase sync and phone push
 alerts need internet. For sensor readings, install the published GitHub Pages

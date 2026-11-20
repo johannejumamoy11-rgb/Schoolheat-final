@@ -149,8 +149,8 @@
     <div class="header-brand">
       <img src="assets/app-logo.png" alt="Logo" class="header-logo">
       <div class="header-text">
-        <span class="header-title">SchoolHeat</span>
-        <span class="header-badge">ENVIRONMENTAL INTELLIGENCE SYSTEM</span>
+        <span class="header-title">SchoolHeat 2.0</span>
+        <span class="header-badge">ENVIRONMENTAL INTELLIGENCE COMMAND CENTER</span>
         <span class="header-project">TUKLAS 2026</span>
       </div>
     </div>
@@ -171,13 +171,36 @@
 
     <!-- TAB 1: DASHBOARD -->
     <section class="tab-panel active" id="tab-dashboard">
-      <div class="panel-header">
-        <span class="dashboard-eyebrow">CAMPUS HEAT SAFETY</span>
-        <h2 class="panel-title">Campus heat, at a glance.</h2>
-        <p class="panel-subtitle">DepEd 4H heat-index levels across 29 mapped sites and the Einstein, Newton, and Locke classrooms</p>
-      </div>
+      <section class="dashboard-hero" aria-labelledby="dashboard-hero-title">
+        <img class="dashboard-hero-image" src="assets/school-bg-mobile.jpg" alt="" fetchpriority="high">
+        <div class="dashboard-hero-shade" aria-hidden="true"></div>
+        <div class="dashboard-hero-content">
+          <div class="dashboard-hero-topline">
+            <span class="dashboard-eyebrow">SCHOOLHEAT 2.0 · ENVIRONMENTAL INTELLIGENCE</span>
+            <span class="dashboard-freshness nodata" id="dashboard-freshness">NO DATA</span>
+          </div>
+          <h2 id="dashboard-hero-title">Campus conditions, at a glance.</h2>
+          <p>Heat safety insights for the school day, grounded in saved sensor readings and the DepEd 4H classification.</p>
+          <div class="dashboard-hero-meta">
+            <div><span>Latest saved reading</span><strong id="dashboard-last-update">No reading recorded</strong></div>
+            <div><span>Location</span><strong id="dashboard-latest-location">—</strong></div>
+            <div><span>ESP32 session</span><strong id="dashboard-device-status">No device response in this session</strong></div>
+          </div>
+          <div class="dashboard-hero-actions">
+            <button class="btn-primary" type="button" onclick="app.switchTab('map')">Explore campus map <span aria-hidden="true">→</span></button>
+            <button class="btn-secondary" type="button" onclick="app.switchTab('monitor')">Open Sensor Monitor</button>
+          </div>
+        </div>
+      </section>
 
-      <div class="status-grid">
+      <div class="dashboard-section-heading">
+        <div>
+          <span class="dashboard-section-kicker">CAMPUS HEAT SAFETY</span>
+          <h3>Latest saved classifications</h3>
+        </div>
+        <span id="dashboard-location-summary">Counts use the latest saved reading at each location, including demo data; they are not simultaneous campus coverage.</span>
+      </div>
+      <div class="status-grid" aria-label="Latest saved readings grouped by DepEd 4H classification">
         <div class="status-card safe" data-status="safe">
           <div class="status-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -211,6 +234,7 @@
           <div class="status-range">42°C and above</div>
         </div>
       </div>
+      <p class="dashboard-data-caveat">Counts use the latest saved reading at each location, including clearly marked demo data; they do not represent simultaneous coverage of every campus building.</p>
 
       <section class="glass-card heat-guidance-card nodata" id="heat-guidance-card" aria-live="polite">
         <div class="heat-guidance-header">
@@ -227,33 +251,37 @@
       <div class="dashboard-content-grid">
       <div class="glass-card latest-reading" id="latest-reading-card">
         <div class="reading-header">
-          <span class="reading-location" id="latest-location">—</span>
+          <div>
+            <span class="dashboard-section-kicker">CURRENT HEAT INDEX</span>
+            <span class="reading-location" id="latest-location">—</span>
+          </div>
           <span class="reading-time" id="latest-time">—</span>
         </div>
         <div class="reading-source" id="latest-source">No source information</div>
         <div class="reading-freshness nodata" id="reading-freshness">No readings available</div>
         <div class="reading-main">
-          <div class="reading-gauge-wrap">
-            <canvas id="gauge-canvas" width="200" height="200"></canvas>
-            <div class="gauge-value" id="gauge-value">—</div>
-            <div class="gauge-unit">°C</div>
+          <div class="dashboard-gauge-block">
+            <div class="reading-gauge-wrap">
+              <canvas id="gauge-canvas" width="240" height="220" role="img" aria-label="Heat Index gauge. The current value and classification appear beside it."></canvas>
+              <div class="gauge-value" id="gauge-value">—</div>
+              <div class="gauge-unit">°C</div>
+            </div>
+            <div class="dashboard-gauge-caption">
+              <span>DepEd 4H classification</span>
+              <span class="status-pill nodata" id="latest-status">No Data</span>
+            </div>
+            <span class="sr-only" id="latest-hi">—</span>
           </div>
-          <div class="reading-details">
-            <div class="detail-row">
-              <span class="detail-label">Temperature</span>
-              <span class="detail-value" id="latest-temp">—</span>
+          <div class="reading-details dashboard-reading-metrics">
+            <div class="detail-row dashboard-reading-metric temperature">
+              <span class="detail-label">Air temperature</span>
+              <strong class="detail-value" id="latest-temp">—</strong>
+              <span class="dashboard-metric-caption">At the latest recorded time</span>
             </div>
-            <div class="detail-row">
-              <span class="detail-label">Humidity</span>
-              <span class="detail-value" id="latest-humidity">—</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Heat Index</span>
-              <span class="detail-value" id="latest-hi">—</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Status</span>
-              <span class="detail-value"><span class="status-pill" id="latest-status">No Data</span></span>
+            <div class="detail-row dashboard-reading-metric humidity">
+              <span class="detail-label">Relative humidity</span>
+              <strong class="detail-value" id="latest-humidity">—</strong>
+              <span class="dashboard-metric-caption">At the latest recorded time</span>
             </div>
           </div>
         </div>
@@ -279,6 +307,131 @@
         </div>
       </div>
       </div>
+      <section class="dashboard-insights" aria-label="Campus intelligence previews">
+        <article class="glass-card dashboard-preview-card campus-preview-card">
+          <div class="dashboard-preview-heading">
+            <div>
+              <span class="dashboard-section-kicker">CAMPUS INTELLIGENCE</span>
+              <h3>2D Campus Map</h3>
+            </div>
+            <span class="dashboard-preview-tag">29 mapped sites</span>
+          </div>
+          <button class="campus-preview-image-button" type="button" onclick="app.switchTab('map')" aria-label="Open the interactive campus map">
+            <img src="assets/campus-map.png" alt="SchoolHeat's 2D campus site map with numbered buildings." loading="lazy" decoding="async">
+            <span>Open interactive map <span aria-hidden="true">↗</span></span>
+          </button>
+          <p id="dashboard-map-summary">The map shows saved readings, including demo data; locations without readings remain unclassified.</p>
+          <p class="dashboard-preview-note">A verified 3D campus model is not available. Map markers do not imply that every building has its own sensor.</p>
+        </article>
+
+        <article class="glass-card dashboard-preview-card forecast-preview-card">
+          <div class="dashboard-preview-heading">
+            <div>
+              <span class="dashboard-section-kicker">HEAT HORIZON</span>
+              <h3>30-minute outlook</h3>
+            </div>
+            <span class="dashboard-preview-tag">Forecast</span>
+          </div>
+          <div class="dashboard-forecast-empty" id="dashboard-forecast-empty">
+            <strong id="dashboard-forecast-empty-title">Forecast unavailable</strong>
+            <span id="dashboard-forecast-empty-detail">At least 12 complete same-location examples from non-demo readings are needed. No prediction is shown until the data supports one.</span>
+          </div>
+          <div class="dashboard-forecast-content" id="dashboard-forecast-content" hidden>
+            <div class="dashboard-forecast-summary">
+              <div>
+                <span>Predicted Heat Index</span>
+                <strong id="dashboard-forecast-value">—</strong>
+              </div>
+              <span class="status-pill nodata" id="dashboard-forecast-status">—</span>
+            </div>
+            <div class="dashboard-forecast-meta">
+              <span id="dashboard-forecast-model">Model unavailable</span>
+              <span id="dashboard-forecast-time">Forecast time unavailable</span>
+            </div>
+            <canvas id="dashboard-forecast-chart" width="600" height="180" role="img" aria-label="Forecast chart unavailable"></canvas>
+            <div class="dashboard-chart-legend">
+              <span><i class="recorded-line"></i>Recorded</span>
+              <span><i class="predicted-line"></i>30-minute forecast</span>
+            </div>
+          </div>
+          <button class="btn-text dashboard-preview-action" type="button" onclick="app.switchTab('forecast')">View forecast details <span aria-hidden="true">→</span></button>
+        </article>
+
+        <article class="glass-card dashboard-preview-card dashboard-trust-card">
+          <div class="dashboard-preview-heading">
+            <div>
+              <span class="dashboard-section-kicker">SENSOR TRUST</span>
+              <h3>Device &amp; data health</h3>
+            </div>
+            <span class="dashboard-device-dot" id="dashboard-device-dot" aria-hidden="true"></span>
+          </div>
+          <p class="dashboard-device-response" id="dashboard-sensor-response">No device response in this session</p>
+          <div class="dashboard-trust-grid">
+            <div><span>Saved ESP32 readings</span><strong id="dashboard-sensor-count">0</strong></div>
+            <div><span>Latest DHT22 report</span><strong id="dashboard-sensor-sample">Not checked</strong></div>
+            <div><span>Latest ESP32 record</span><strong id="dashboard-sensor-last-reading">No ESP32 history</strong></div>
+            <div><span>Observed gaps</span><strong id="dashboard-sensor-gaps">No ESP32 history</strong></div>
+          </div>
+          <p class="dashboard-preview-note">A recent response does not prove a current connection, calibration, or measurement accuracy.</p>
+          <button class="btn-text dashboard-preview-action" type="button" onclick="app.switchTab('monitor')">View Sensor Monitor <span aria-hidden="true">→</span></button>
+        </article>
+
+        <article class="glass-card dashboard-preview-card comfort-preview-card">
+          <div class="dashboard-preview-heading">
+            <div>
+              <span class="dashboard-section-kicker">STUDENT COMFORT PULSE</span>
+              <h3>Comfort feedback</h3>
+            </div>
+            <span class="dashboard-preview-tag unavailable">Not enabled</span>
+          </div>
+          <div class="comfort-empty-state">
+            <div class="comfort-empty-mark" aria-hidden="true">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="24" cy="24" r="18" stroke-dasharray="4 5"/><path d="M17 29c2 2 4.3 3 7 3s5-1 7-3M18 20h.01M30 20h.01"/></svg>
+            </div>
+            <strong>No feedback data is available</strong>
+            <p>SchoolHeat does not currently have an approved student feedback form. No response totals or comfort percentages are fabricated.</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="dashboard-quick-actions" aria-labelledby="dashboard-quick-actions-title">
+        <div class="dashboard-section-heading">
+          <div>
+            <span class="dashboard-section-kicker">FIELD TOOLS</span>
+            <h3 id="dashboard-quick-actions-title">Quick actions</h3>
+          </div>
+        </div>
+        <div class="dashboard-action-grid">
+          <button type="button" class="dashboard-action-card" onclick="app.switchTab('map')">
+            <span class="dashboard-action-icon campus-action" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg>
+            </span>
+            <span><strong>View Campus Map</strong><small>Explore mapped locations</small></span>
+            <span class="dashboard-action-arrow" aria-hidden="true">→</span>
+          </button>
+          <button type="button" class="dashboard-action-card" onclick="app.switchTab('forecast')">
+            <span class="dashboard-action-icon forecast-action" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17 9 11l4 4 8-9"/><path d="M15 6h6v6"/></svg>
+            </span>
+            <span><strong>Check Forecast</strong><small>Review the 30-minute outlook</small></span>
+            <span class="dashboard-action-arrow" aria-hidden="true">→</span>
+          </button>
+          <button type="button" class="dashboard-action-card" onclick="app.openHistoryAnalytics()">
+            <span class="dashboard-action-icon analytics-action" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h17"/><path d="m7 15 4-4 3 2 6-7"/></svg>
+            </span>
+            <span><strong>Open Analytics</strong><small>Inspect recorded trends</small></span>
+            <span class="dashboard-action-arrow" aria-hidden="true">→</span>
+          </button>
+          <button type="button" class="dashboard-action-card" onclick="app.openKnowledgeAssistant()">
+            <span class="dashboard-action-icon assistant-action" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.5A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 11h.01M12 11h.01M16 11h.01"/></svg>
+            </span>
+            <span><strong>Ask SchoolHeat</strong><small>Get answers from saved data</small></span>
+            <span class="dashboard-action-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+      </section>
     </section>
 
     <!-- TAB 2: MONITOR -->
@@ -448,60 +601,6 @@
           <option value="extreme">Hinto</option>
         </select>
       </div>
-
-      <section class="glass-card thermal-replay-card" aria-labelledby="thermal-replay-title">
-        <div class="card-header">
-          <h3 id="thermal-replay-title">Thermal Replay</h3>
-          <span class="replay-mode-tag">Recorded data only</span>
-        </div>
-        <p class="setting-hint">Replay stored, non-demo readings for one location and date. The timeline never fills gaps with estimated values.</p>
-        <div class="replay-filter-grid">
-          <div class="input-group">
-            <label for="thermal-replay-location">Location</label>
-            <select id="thermal-replay-location" class="input-field"></select>
-          </div>
-          <div class="input-group">
-            <label for="thermal-replay-date">Monitoring date</label>
-            <select id="thermal-replay-date" class="input-field"></select>
-          </div>
-          <div class="input-group">
-            <label for="thermal-replay-compare-date">Compare with date</label>
-            <select id="thermal-replay-compare-date" class="input-field"></select>
-          </div>
-        </div>
-        <div class="replay-timeline-wrap">
-          <label for="thermal-replay-timeline">Recorded reading timeline</label>
-          <input id="thermal-replay-timeline" type="range" min="0" max="0" value="0" disabled>
-          <div class="replay-range-labels"><span>First record</span><span id="thermal-replay-position">No readings</span><span>Last record</span></div>
-        </div>
-        <div class="replay-actions">
-          <button class="btn-secondary" id="thermal-replay-previous" type="button" disabled>Previous</button>
-          <button class="btn-primary" id="thermal-replay-play" type="button" disabled>Play</button>
-          <button class="btn-secondary" id="thermal-replay-next" type="button" disabled>Next</button>
-          <label for="thermal-replay-speed">Playback speed</label>
-          <select id="thermal-replay-speed" class="input-field">
-            <option value="0.5">0.5×</option>
-            <option value="1" selected>1×</option>
-            <option value="2">2×</option>
-            <option value="4">4×</option>
-          </select>
-        </div>
-        <div class="replay-reading-card" id="thermal-replay-reading" hidden aria-live="polite">
-          <div class="replay-reading-heading">
-            <strong id="thermal-replay-timestamp">—</strong>
-            <span id="thermal-replay-source">—</span>
-          </div>
-          <div class="replay-reading-metrics">
-            <div><span>Temperature</span><strong id="thermal-replay-temperature">—</strong></div>
-            <div><span>Relative humidity</span><strong id="thermal-replay-humidity">—</strong></div>
-            <div><span>Heat Index</span><strong id="thermal-replay-heat-index">—</strong></div>
-            <div><span>Classification</span><strong id="thermal-replay-status">—</strong></div>
-          </div>
-          <p class="setting-hint" id="thermal-replay-gap"></p>
-          <div class="replay-comparison" id="thermal-replay-comparison" aria-live="polite"></div>
-        </div>
-        <div class="empty-desc" id="thermal-replay-empty">No non-demo readings are available for replay. Sync a sensor or import verified measurements first.</div>
-      </section>
 
       <div class="glass-card chart-card" id="history-analytics">
         <div class="card-header">
