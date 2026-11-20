@@ -42,12 +42,21 @@ const STUDY_CLASSROOMS = [
 ];
 
 const STATUS_COLORS = {
-  safe: '#31d69a',
-  caution: '#ffc857',
-  danger: '#ff873d',
-  extreme: '#ff4d5a',
-  nodata: '#8292a7'
+  safe: '#81c99d',
+  caution: '#f0c66c',
+  danger: '#ef9874',
+  extreme: '#f17b7b',
+  nodata: '#a7b3ab'
 };
+
+function getDesignToken(name, fallback) {
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function getStatusColor(status) {
+  return getDesignToken(`--${status}`, STATUS_COLORS[status] || STATUS_COLORS.nodata);
+}
 
 const STATUS_LABELS = {
   safe: 'Hayo',
@@ -56,6 +65,234 @@ const STATUS_LABELS = {
   extreme: 'Hinto',
   nodata: 'No Data'
 };
+
+const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+function hexToRgb(hex) {
+  if (!HEX_COLOR_PATTERN.test(hex)) return null;
+  return {
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16)
+  };
+}
+
+function getRelativeLuminance(hex) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  const channels = [rgb.r, rgb.g, rgb.b].map(value => {
+    const channel = value / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+
+function getContrastRatio(first, second) {
+  const luminances = [getRelativeLuminance(first), getRelativeLuminance(second)].sort((a, b) => b - a);
+  return (luminances[0] + 0.05) / (luminances[1] + 0.05);
+}
+
+function mixHexColors(first, second, amount) {
+  const firstRgb = hexToRgb(first);
+  const secondRgb = hexToRgb(second);
+  if (!firstRgb || !secondRgb) return first;
+  const channels = ['r', 'g', 'b'].map(channel => Math.round(
+    firstRgb[channel] * (1 - amount) + secondRgb[channel] * amount
+  ));
+  return `#${channels.map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function getAccessibleAccent(hex, surface) {
+  return getAccessibleColor(hex, surface, 4.5);
+}
+
+function getAccessibleColor(hex, surface, minimumRatio) {
+  const surfaces = Array.isArray(surface) ? surface : [surface];
+  if (surfaces.every(item => getContrastRatio(hex, item) >= minimumRatio)) return hex;
+  for (const target of ['#000000', '#ffffff']) {
+    for (let step = 1; step <= 50; step++) {
+      const candidate = mixHexColors(hex, target, step / 50);
+      if (surfaces.every(item => getContrastRatio(candidate, item) >= minimumRatio)) return candidate;
+    }
+  }
+  return null;
+}
+
+function getReadableTextColor(hex) {
+  const light = '#fffdf6';
+  const dark = '#000000';
+  return getContrastRatio(hex, light) >= getContrastRatio(hex, dark) ? light : dark;
+}
+
+const CUSTOM_PALETTE_FIELDS = Object.freeze([
+  'background',
+  'surface',
+  'border',
+  'text',
+  'secondaryText',
+  'accent',
+  'secondaryAccent'
+]);
+
+const CUSTOM_THEME_COLOR_DEFAULTS = Object.freeze({
+  dark: Object.freeze({
+    background: '#111b1a',
+    surface: '#192624',
+    border: '#62746d',
+    text: '#f3f1e8',
+    secondaryText: '#c1ccc4',
+    accent: '#82c4a8',
+    secondaryAccent: '#e58e6b'
+  }),
+  light: Object.freeze({
+    background: '#f4f1e7',
+    surface: '#fffdf6',
+    border: '#77867d',
+    text: '#1c302c',
+    secondaryText: '#455b53',
+    accent: '#17685e',
+    secondaryAccent: '#a64f36'
+  })
+});
+
+const APP_COLOR_PALETTES = Object.freeze({
+  schoolheat: null,
+  canopy: Object.freeze({
+    dark: Object.freeze({
+      background: '#111b15',
+      surface: '#1d2b21',
+      border: '#65786a',
+      text: '#f1f3e8',
+      secondaryText: '#c4d0c0',
+      accent: '#78b879',
+      secondaryAccent: '#d59a68'
+    }),
+    light: Object.freeze({
+      background: '#eff3e8',
+      surface: '#fbfdf6',
+      border: '#788672',
+      text: '#26372a',
+      secondaryText: '#526451',
+      accent: '#356d42',
+      secondaryAccent: '#925334'
+    })
+  }),
+  lagoon: Object.freeze({
+    dark: Object.freeze({
+      background: '#101b20',
+      surface: '#19282d',
+      border: '#657980',
+      text: '#edf4f1',
+      secondaryText: '#bfd0d1',
+      accent: '#6abbb3',
+      secondaryAccent: '#e39a7b'
+    }),
+    light: Object.freeze({
+      background: '#edf4f1',
+      surface: '#fbfdfb',
+      border: '#748987',
+      text: '#213b3d',
+      secondaryText: '#4e6664',
+      accent: '#216b6d',
+      secondaryAccent: '#93503a'
+    })
+  }),
+  custom: null
+});
+
+function getCustomPaletteValidationError(colors) {
+  if (!colors || CUSTOM_PALETTE_FIELDS.some(field => !HEX_COLOR_PATTERN.test(colors[field] || ''))) {
+    return 'Choose a valid color for every palette field.';
+  }
+  const surfaces = [colors.background, colors.surface];
+  const textColors = [
+    ['Main text', colors.text],
+    ['Secondary text', colors.secondaryText]
+  ];
+  for (const [label, color] of textColors) {
+    if (surfaces.some(surface => getContrastRatio(color, surface) < 4.5)) {
+      return `${label} needs at least 4.5:1 contrast on both backgrounds.`;
+    }
+  }
+  if ([colors.accent, colors.secondaryAccent].some(color => !getAccessibleAccent(color, surfaces))) {
+    return 'Choose page and card colors that allow readable accents.';
+  }
+  if (!getAccessibleColor(colors.border, surfaces, 3)) {
+    return 'Borders need at least 3:1 contrast on both backgrounds.';
+  }
+  return '';
+}
+
+function normalizeCustomPaletteColors(storedColors, legacyAccent) {
+  const normalized = {};
+  ['dark', 'light'].forEach(theme => {
+    const defaults = CUSTOM_THEME_COLOR_DEFAULTS[theme];
+    const storedTheme = storedColors && typeof storedColors === 'object'
+      ? storedColors[theme]
+      : null;
+    const colors = { ...defaults };
+    if (storedTheme && typeof storedTheme === 'object') {
+      CUSTOM_PALETTE_FIELDS.forEach(field => {
+        if (HEX_COLOR_PATTERN.test(storedTheme[field] || '')) colors[field] = storedTheme[field];
+      });
+    } else if (HEX_COLOR_PATTERN.test(legacyAccent || '')) {
+      colors.accent = legacyAccent;
+    }
+    normalized[theme] = getCustomPaletteValidationError(colors) ? { ...defaults } : colors;
+  });
+  return normalized;
+}
+
+const CUSTOM_ACCENT_CHOICES = Object.freeze([
+  '#4f8d5a',
+  '#b94444',
+  '#287985',
+  '#26999e',
+  '#3777a8',
+  '#3a5f8e',
+  '#82c4a8',
+  '#7252a3',
+  '#535fa8',
+  '#ac4a72',
+  '#ca6389',
+  '#cf7155',
+  '#ba6048',
+  '#bd6c23',
+  '#bd8218',
+  '#b49b24'
+]);
+
+function createCustomPaletteColors(theme, selectedAccent) {
+  const defaults = CUSTOM_THEME_COLOR_DEFAULTS[theme];
+  if (!defaults || !HEX_COLOR_PATTERN.test(selectedAccent || '')) {
+    throw new TypeError('A supported theme and valid accent color are required.');
+  }
+
+  const tint = theme === 'dark' ? 0.08 : 0.025;
+  const background = mixHexColors(defaults.background, selectedAccent, tint);
+  const surface = mixHexColors(defaults.surface, selectedAccent, tint * 1.25);
+  const surfaces = [background, surface];
+  const palette = {
+    background,
+    surface,
+    border: getAccessibleColor(
+      mixHexColors(defaults.border, selectedAccent, 0.14),
+      surfaces,
+      3
+    ) || defaults.border,
+    text: defaults.text,
+    secondaryText: defaults.secondaryText,
+    accent: getAccessibleAccent(selectedAccent, surfaces) || defaults.accent,
+    secondaryAccent: getAccessibleAccent(
+      mixHexColors(defaults.secondaryAccent, selectedAccent, 0.2),
+      surfaces
+    ) || defaults.secondaryAccent
+  };
+  if (getCustomPaletteValidationError(palette)) {
+    throw new Error('The selected color could not produce a readable app palette.');
+  }
+  return palette;
+}
 
 const FORECAST_CANDIDATE_MODELS = [
   'mlr',
@@ -81,10 +318,11 @@ const ESP32_BRIDGE_BASE = 'http://localhost:8765';
 const SMS_QUEUE_STORAGE_KEY = 'sh_pending_sms';
 const SMS_QUEUE_MAX_ITEMS = 20;
 const SMS_RETRY_DELAY_MS = 5 * 60 * 1000;
+const HISTORY_PAGE_SIZE = 50;
 
 class SchoolHeatApp {
   constructor() {
-    const defaultSettings = { firebase: true, browserNotifications: false, pushAlerts: false, smsAlerts: false, smsNumbers: '', outlier: true, spike: true, demoMode: false, tempOffset: 0, humidityOffset: 0, darkMode: true, colorMode: 'automatic', language: 'en' };
+    const defaultSettings = { firebase: true, browserNotifications: false, pushAlerts: false, smsAlerts: false, smsNumbers: '', outlier: true, spike: true, demoMode: false, tempOffset: 0, humidityOffset: 0, darkMode: true, colorMode: 'automatic', accentPalette: 'schoolheat', customAccentColor: '#287985', customPaletteColors: null, language: 'en' };
     try {
       const storedReadings = JSON.parse(localStorage.getItem('sh_readings') || '[]');
       this.readings = Array.isArray(storedReadings) ? storedReadings : [];
@@ -103,6 +341,16 @@ class SchoolHeatApp {
     if (!['automatic', 'unified'].includes(this.settings.colorMode)) {
       this.settings.colorMode = 'automatic';
     }
+    if (!Object.prototype.hasOwnProperty.call(APP_COLOR_PALETTES, this.settings.accentPalette)) {
+      this.settings.accentPalette = 'schoolheat';
+    }
+    if (!HEX_COLOR_PATTERN.test(this.settings.customAccentColor)) {
+      this.settings.customAccentColor = '#287985';
+    }
+    this.settings.customPaletteColors = normalizeCustomPaletteColors(
+      this.settings.customPaletteColors,
+      this.settings.customAccentColor
+    );
     if (window.SCHOOLHEAT_I18N?.languages && !window.SCHOOLHEAT_I18N.languages[this.settings.language]) {
       this.settings.language = 'en';
     }
@@ -111,8 +359,13 @@ class SchoolHeatApp {
     this.localizedAttributes = new WeakMap();
     this.languageObserver = null;
     this.currentTab = 'dashboard';
+    this.historyPage = 0;
+    this.historyFilterTimer = null;
     this.forecastChartLoaded = false;
     this.forecastComparisonCache = null;
+    this.dashboardForecastObserver = null;
+    this.dashboardForecastRenderScheduled = false;
+    this.dashboardForecastVisibilityHandler = null;
     this.trendChartLoaded = false;
     this.trendActiveIndex = null;
     this.distributionChartLoaded = false;
@@ -151,8 +404,8 @@ class SchoolHeatApp {
     this.updateAutoReadButton();
     this.startClock();
     this.checkFirstVisit();
+    this.setupDashboardForecastObserver();
     this.updateDashboard();
-    this.renderHistory();
     this.renderMap();
     this.setupForecastObserver();
     this.setupTrendObserver();
@@ -277,7 +530,10 @@ class SchoolHeatApp {
       this.updateReadingFreshness();
     };
     update();
-    setInterval(update, 1000);
+    setInterval(update, 60_000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) update();
+    });
   }
 
   getReadingFreshness(reading, now = Date.now()) {
@@ -304,22 +560,7 @@ class SchoolHeatApp {
     const age = ageMinutes < 60
       ? `${ageMinutes} min ago`
       : `${Math.floor(ageMinutes / 60)} hr ${ageMinutes % 60} min ago`;
-    return { state: 'stale', label: 'STALE', detail: `Last reading ${age}. Sync the sensor before treating it as current.` };
-  }
-
-  getReadingSourceLabel(reading) {
-    if (!reading) return this.translateText('No source information');
-    if (reading.source === 'demo' || reading.isDemo) return this.translateText('DEMO DATA');
-    if (reading.source === 'esp32' || String(reading.id ?? '').startsWith('esp32-')) {
-      return this.translateText('ESP32 DHT22');
-    }
-    if (reading.source === 'imported' || reading.sourceFile) {
-      const sourceFile = String(reading.sourceFile || '').slice(0, 100);
-      const importedLabel = this.translateText('IMPORTED');
-      return sourceFile ? `${importedLabel} · ${sourceFile}` : importedLabel;
-    }
-    if (reading.source === 'manual') return this.translateText('MANUAL ENTRY');
-    return this.translateText('SOURCE NOT RECORDED');
+    return { state: 'stale', label: 'OLD DATA', detail: `Last reading ${age}. Update the sensor to get a new reading.` };
   }
 
   hasValidMeasurement(reading) {
@@ -339,10 +580,7 @@ class SchoolHeatApp {
     if (!this.hasValidMeasurement(reading)) {
       return 'NO DATA';
     }
-    if (String(reading.id).startsWith('esp32-') && this.getReadingFreshness(reading, now).state === 'recent') {
-      return 'RECENT ESP32 READING (TIMESTAMP)';
-    }
-    return 'HISTORICAL MEASUREMENT';
+    return this.getReadingFreshness(reading, now).state === 'recent' ? 'RECENT' : 'SAVED READING';
   }
 
   updateReadingFreshness() {
@@ -355,12 +593,12 @@ class SchoolHeatApp {
     const dashboardBadge = document.getElementById('dashboard-freshness');
 
     if (header) header.className = `header-live ${freshness.state}`;
-    if (headerText) headerText.textContent = freshness.label;
+    if (headerText) headerText.textContent = this.translateText(freshness.label);
     if (monitorBadge) monitorBadge.className = `monitor-live-badge ${freshness.state}`;
-    if (monitorText) monitorText.textContent = freshness.label;
+    if (monitorText) monitorText.textContent = this.translateText(freshness.label);
     if (dashboardBadge) {
       dashboardBadge.className = `dashboard-freshness ${freshness.state}`;
-      dashboardBadge.textContent = freshness.label;
+      dashboardBadge.textContent = this.translateText(freshness.label);
     }
     if (detail) {
       detail.className = `reading-freshness ${freshness.state}`;
@@ -389,7 +627,7 @@ class SchoolHeatApp {
     const status = this.getStatus(reading.heatIndex);
     if (freshness.state === 'stale' || freshness.state === 'invalid') {
       card.className = `glass-card heat-guidance-card ${freshness.state}`;
-      level.textContent = freshness.label;
+      level.textContent = this.translateText(freshness.label);
       title.textContent = 'Confirm current conditions before acting';
       detail.textContent = `${reading.location}: the last saved reading was ${STATUS_LABELS[status]} at ${reading.heatIndex.toFixed(1)}°C. ${freshness.detail}`;
       return;
@@ -539,19 +777,15 @@ class SchoolHeatApp {
     const humInput = document.getElementById('humidity-input');
     if (tempInput) tempInput.addEventListener('input', () => this.updatePreview());
     if (humInput) humInput.addEventListener('input', () => this.updatePreview());
-    const uploadButton = document.getElementById('history-upload-button');
-    const uploadInput = document.getElementById('history-file-input');
-    uploadButton?.addEventListener('click', () => uploadInput?.click());
-    uploadInput?.addEventListener('change', async () => {
-      const file = uploadInput.files?.[0];
-      if (!file) return;
-      try {
-        await this.importReadingsFile(file);
-      } finally {
-        uploadInput.value = '';
-      }
-    });
     document.getElementById('history-list')?.addEventListener('click', event => {
+      const pageButton = event.target.closest('[data-history-page]');
+      if (pageButton) {
+        const pageDelta = Number(pageButton.dataset.historyPage);
+        if (!Number.isInteger(pageDelta)) return;
+        this.historyPage += Math.sign(pageDelta);
+        this.renderHistory(false);
+        return;
+      }
       const button = event.target.closest('[data-delete-reading-index]');
       if (!button) return;
       this.deleteReading(Number(button.dataset.deleteReadingIndex));
@@ -583,360 +817,6 @@ class SchoolHeatApp {
         document.getElementById('auto-read-overlay')?.classList.remove('active');
       }
     });
-  }
-
-  async importReadingsFile(file) {
-    const maxFileSize = 5 * 1024 * 1024;
-    if (file.size > maxFileSize) {
-      this.toast('Choose a file smaller than 5 MB.', 'error');
-      return;
-    }
-
-    try {
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      let rows;
-      if (extension === 'csv') {
-        rows = this.parseDelimitedText(await file.text());
-      } else if (extension === 'xlsx') {
-        rows = await this.parseXlsxFile(file);
-      } else {
-        throw new Error('Choose a CSV or Excel (.xlsx) file.');
-      }
-
-      const parsed = this.normalizeUploadedReadings(rows, file.name);
-      if (!parsed.readings.length) {
-        throw new Error('No valid rows found. Check the timestamp, temperature, and humidity columns.');
-      }
-
-      const existingIds = new Set(this.readings.map(reading => String(reading.id)));
-      const imported = parsed.readings.filter(reading => !existingIds.has(String(reading.id)));
-      if (!imported.length) {
-        this.toast('These readings are already in your history.', 'info');
-        return;
-      }
-
-      const previousReadings = this.readings;
-      this.readings = [...previousReadings, ...imported].sort((a, b) => {
-        const timeA = new Date(a.timestamp).getTime();
-        const timeB = new Date(b.timestamp).getTime();
-        if (!Number.isFinite(timeA)) return Number.isFinite(timeB) ? 1 : 0;
-        if (!Number.isFinite(timeB)) return -1;
-        return timeB - timeA;
-      });
-      try {
-        this.saveReadings();
-      } catch (error) {
-        this.readings = previousReadings;
-        throw new Error(`Could not save imported readings in this browser: ${error.message}`);
-      }
-
-      this.lastObservedReadingId = this.readings[0]?.id ?? this.lastObservedReadingId;
-      this.forecastComparisonCache = null;
-      this.updateDashboard();
-      this.renderHistory();
-      this.renderMap();
-      this.updateMonitorGauge();
-      if (this.currentTab === 'forecast') this.drawForecastChart();
-      const skipped = parsed.skipped ? ` ${parsed.skipped} invalid row(s) skipped.` : '';
-      this.toast(`Imported ${imported.length} reading(s) from ${file.name}.${skipped} Open Forecast to view the updated prediction.`, 'success');
-    } catch (error) {
-      console.error('Could not import SchoolHeat readings:', error);
-      this.toast(error.message || 'Could not read this file.', 'error');
-    }
-  }
-
-  parseDelimitedText(text) {
-    const source = text.replace(/^\uFEFF/, '');
-    const firstLine = source.split(/\r?\n/, 1)[0] || '';
-    let delimiter = ',';
-    let maxCount = -1;
-    for (const candidate of [',', ';', '\t']) {
-      let count = 0;
-      let quoted = false;
-      for (let index = 0; index < firstLine.length; index++) {
-        if (firstLine[index] === '"') {
-          if (quoted && firstLine[index + 1] === '"') index++;
-          else quoted = !quoted;
-        } else if (!quoted && firstLine[index] === candidate) {
-          count++;
-        }
-      }
-      if (count > maxCount) {
-        delimiter = candidate;
-        maxCount = count;
-      }
-    }
-    if (maxCount < 1) throw new Error('The CSV file does not appear to contain a header row.');
-
-    const rows = [];
-    let row = [];
-    let cell = '';
-    let quoted = false;
-    for (let index = 0; index < source.length; index++) {
-      const character = source[index];
-      if (character === '"') {
-        if (quoted && source[index + 1] === '"') {
-          cell += '"';
-          index++;
-        } else {
-          quoted = !quoted;
-        }
-      } else if (!quoted && character === delimiter) {
-        row.push(cell);
-        cell = '';
-      } else if (!quoted && (character === '\n' || character === '\r')) {
-        if (character === '\r' && source[index + 1] === '\n') index++;
-        row.push(cell);
-        if (row.some(value => String(value).trim())) rows.push(row);
-        row = [];
-        cell = '';
-      } else {
-        cell += character;
-      }
-    }
-    if (quoted) throw new Error('The CSV file has an unclosed quoted field.');
-    row.push(cell);
-    if (row.some(value => String(value).trim())) rows.push(row);
-    return rows;
-  }
-
-  async parseXlsxFile(file) {
-    if (typeof DecompressionStream !== 'function' || typeof DOMParser !== 'function') {
-      throw new Error('Excel import needs a current Chrome or Edge browser. You can also save the spreadsheet as CSV.');
-    }
-
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const endOfCentralDirectorySignature = 0x06054b50;
-    let endOffset = -1;
-    for (let offset = Math.max(0, bytes.length - 65557); offset <= bytes.length - 22; offset++) {
-      if (view.getUint32(offset, true) === endOfCentralDirectorySignature) endOffset = offset;
-    }
-    if (endOffset < 0) throw new Error('This is not a valid .xlsx workbook.');
-
-    const entryCount = view.getUint16(endOffset + 10, true);
-    let directoryOffset = view.getUint32(endOffset + 16, true);
-    const entries = new Map();
-    for (let index = 0; index < entryCount; index++) {
-      if (directoryOffset + 46 > bytes.length || view.getUint32(directoryOffset, true) !== 0x02014b50) {
-        throw new Error('The Excel workbook has an invalid ZIP directory.');
-      }
-      const flags = view.getUint16(directoryOffset + 8, true);
-      const method = view.getUint16(directoryOffset + 10, true);
-      const compressedSize = view.getUint32(directoryOffset + 20, true);
-      const uncompressedSize = view.getUint32(directoryOffset + 24, true);
-      const nameLength = view.getUint16(directoryOffset + 28, true);
-      const extraLength = view.getUint16(directoryOffset + 30, true);
-      const commentLength = view.getUint16(directoryOffset + 32, true);
-      const localOffset = view.getUint32(directoryOffset + 42, true);
-      const nameStart = directoryOffset + 46;
-      const name = new TextDecoder().decode(bytes.subarray(nameStart, nameStart + nameLength));
-      if (uncompressedSize > 20 * 1024 * 1024) throw new Error('An Excel worksheet is too large to import safely.');
-      entries.set(name, { flags, method, compressedSize, uncompressedSize, localOffset });
-      directoryOffset = nameStart + nameLength + extraLength + commentLength;
-    }
-
-    const readEntry = async name => {
-      const entry = entries.get(name);
-      if (!entry) return null;
-      if (entry.flags & 1) throw new Error('Password-protected Excel files are not supported.');
-      const local = entry.localOffset;
-      if (view.getUint32(local, true) !== 0x04034b50) throw new Error('The Excel workbook contains an invalid worksheet.');
-      const dataStart = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
-      const compressed = bytes.slice(dataStart, dataStart + entry.compressedSize);
-      let content;
-      if (entry.method === 0) {
-        content = compressed;
-      } else if (entry.method === 8) {
-        const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-        const reader = stream.getReader();
-        const chunks = [];
-        let totalSize = 0;
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          totalSize += value.length;
-          if (totalSize > 20 * 1024 * 1024) {
-            await reader.cancel();
-            throw new Error('An Excel worksheet is too large to import safely.');
-          }
-          chunks.push(value);
-        }
-        content = new Uint8Array(totalSize);
-        let offset = 0;
-        chunks.forEach(chunk => {
-          content.set(chunk, offset);
-          offset += chunk.length;
-        });
-      } else {
-        throw new Error('This Excel workbook uses an unsupported compression format.');
-      }
-      if (content.length !== entry.uncompressedSize) throw new Error('An Excel worksheet could not be decompressed.');
-      return new DOMParser().parseFromString(new TextDecoder().decode(content), 'application/xml');
-    };
-
-    const workbook = await readEntry('xl/workbook.xml');
-    const relationships = await readEntry('xl/_rels/workbook.xml.rels');
-    if (!workbook || !relationships) throw new Error('The Excel workbook is missing its sheet information.');
-    const sheet = workbook.getElementsByTagNameNS('*', 'sheet')[0];
-    if (!sheet) throw new Error('The Excel workbook has no worksheets.');
-    const relationshipId = sheet.getAttribute('r:id') ||
-      sheet.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
-    const relation = [...relationships.getElementsByTagNameNS('*', 'Relationship')]
-      .find(item => item.getAttribute('Id') === relationshipId);
-    if (!relation) throw new Error('The first worksheet could not be located.');
-    const target = relation.getAttribute('Target').replace(/\\/g, '/');
-    const worksheetPath = target.startsWith('/')
-      ? target.slice(1)
-      : target.startsWith('xl/')
-        ? target
-        : `xl/${target}`;
-    const worksheet = await readEntry(worksheetPath);
-    if (!worksheet) throw new Error('The first worksheet could not be read.');
-
-    const sharedStringsXml = await readEntry('xl/sharedStrings.xml');
-    const sharedStrings = sharedStringsXml
-      ? [...sharedStringsXml.getElementsByTagNameNS('*', 'si')].map(item =>
-        [...item.getElementsByTagNameNS('*', 't')].map(text => text.textContent || '').join(''))
-      : [];
-    const xmlRows = [...worksheet.getElementsByTagNameNS('*', 'row')];
-    return xmlRows.map(xmlRow => {
-      const values = [];
-      [...xmlRow.getElementsByTagNameNS('*', 'c')].forEach((cell, fallbackIndex) => {
-        const reference = cell.getAttribute('r') || '';
-        const letters = reference.match(/[A-Z]+/i)?.[0];
-        let column = fallbackIndex;
-        if (letters) {
-          column = 0;
-          for (const letter of letters.toUpperCase()) column = column * 26 + letter.charCodeAt(0) - 64;
-          column--;
-        }
-        const type = cell.getAttribute('t');
-        const valueElement = cell.getElementsByTagNameNS('*', 'v')[0];
-        let value = valueElement?.textContent || '';
-        if (type === 's') value = sharedStrings[Number(value)] ?? '';
-        if (type === 'inlineStr') {
-          value = [...cell.getElementsByTagNameNS('*', 't')].map(text => text.textContent || '').join('');
-        }
-        values[column] = value;
-      });
-      return values;
-    });
-  }
-
-  normalizeUploadedReadings(rows, fileName) {
-    if (!rows.length) return { readings: [], skipped: 0 };
-    const normalizeHeader = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const headers = rows[0].map(normalizeHeader);
-    const findColumn = aliases => headers.findIndex(header => aliases.includes(header));
-    const temperatureIndex = findColumn(['temperature', 'temperaturec', 'temp', 'tempc', 'airtemperature', 'airtemperaturec']);
-    const humidityIndex = findColumn(['humidity', 'humiditypercent', 'relativehumidity', 'relativehumiditypercent', 'rh']);
-    const timestampIndex = findColumn(['timestamp', 'datetime', 'dateandtime', 'recordedat', 'date', 'readingdate']);
-    const timeIndex = findColumn(['time', 'readingtime']);
-    const locationIndex = findColumn(['location', 'site', 'campuslocation']);
-    const demoIndex = findColumn(['isdemo', 'demo', 'demodata', 'synthetic']);
-    if (temperatureIndex < 0 || humidityIndex < 0 || timestampIndex < 0) {
-      throw new Error('Required columns not found. Include timestamp (or date), temperature, and humidity.');
-    }
-
-    const parseMeasurement = value => {
-      if (typeof value === 'number') return value;
-      const text = String(value ?? '').trim().replace(/[°%]/g, '').replace(/\s/g, '');
-      const normalized = text.includes(',') && !text.includes('.')
-        ? text.replace(',', '.')
-        : text.replace(/,/g, '');
-      return normalized ? Number(normalized) : NaN;
-    };
-    const parseTimeParts = value => {
-      if (typeof value === 'number' && value >= 0 && value < 1) {
-        const seconds = Math.round(value * 86400);
-        return [Math.floor(seconds / 3600) % 24, Math.floor(seconds / 60) % 60, seconds % 60];
-      }
-      const match = String(value ?? '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
-      if (!match) return null;
-      let hour = Number(match[1]);
-      const meridiem = match[4]?.toUpperCase();
-      if (meridiem === 'PM' && hour < 12) hour += 12;
-      if (meridiem === 'AM' && hour === 12) hour = 0;
-      const minute = Number(match[2]);
-      const second = Number(match[3] || 0);
-      if (hour > 23 || minute > 59 || second > 59) return null;
-      return [hour, minute, second];
-    };
-    const parseTimestamp = (dateValue, timeValue) => {
-      if (dateValue instanceof Date) return Number.isFinite(dateValue.getTime()) ? dateValue.toISOString() : null;
-      if (typeof dateValue === 'number' || /^\d{4,6}(?:\.\d+)?$/.test(String(dateValue ?? '').trim())) {
-        const serial = Number(dateValue);
-        if (!Number.isFinite(serial) || serial < 1 || serial > 100000) return null;
-        const wholeDays = Math.floor(serial);
-        const fraction = serial - wholeDays;
-        const date = new Date(1899, 11, 30 + wholeDays);
-        const time = parseTimeParts(timeValue);
-        if (time) date.setHours(...time);
-        else date.setSeconds(Math.round(fraction * 86400));
-        return date.toISOString();
-      }
-      const dateText = String(dateValue ?? '').trim();
-      if (!dateText) return null;
-      let combined = dateText;
-      if (timeValue !== undefined && String(timeValue).trim()) {
-        if (typeof timeValue === 'number') {
-          const time = parseTimeParts(timeValue);
-          if (!time) return null;
-          const date = new Date(dateText);
-          if (!Number.isFinite(date.getTime())) return null;
-          date.setHours(...time);
-          return date.toISOString();
-        }
-        combined = `${dateText} ${String(timeValue).trim()}`;
-      }
-      const date = new Date(combined);
-      return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-    };
-
-    const fallbackLocation = document.getElementById('location-select')?.value || 'Uploaded Data';
-    const fileKey = `${fileName}\n${JSON.stringify(rows)}`;
-    let hash = 2166136261;
-    for (let index = 0; index < fileKey.length; index++) {
-      hash = Math.imul(hash ^ fileKey.charCodeAt(index), 16777619);
-    }
-    const fileId = (hash >>> 0).toString(36);
-    const sourceFile = fileName.slice(0, 160);
-    const readings = [];
-    let skipped = 0;
-    rows.slice(1, 5001).forEach((row, rowIndex) => {
-      const temperature = parseMeasurement(row[temperatureIndex]);
-      const humidity = parseMeasurement(row[humidityIndex]);
-      const timestamp = parseTimestamp(row[timestampIndex], timeIndex >= 0 ? row[timeIndex] : undefined);
-      if (!Number.isFinite(temperature) || temperature < 0 || temperature > 60 ||
-          !Number.isFinite(humidity) || humidity < 0 || humidity > 100 || !timestamp) {
-        skipped++;
-        return;
-      }
-      const locationValue = locationIndex >= 0 ? String(row[locationIndex] ?? '').trim() : '';
-      const location = (locationValue || fallbackLocation).slice(0, 120);
-      const calibratedTemp = temperature + this.settings.tempOffset;
-      const calibratedHumidity = Math.max(0, Math.min(100, humidity + this.settings.humidityOffset));
-      const heatIndex = this.calculateHeatIndex(calibratedTemp, calibratedHumidity);
-      const quality = this.getQualityScore(calibratedTemp, calibratedHumidity);
-      const isDemo = demoIndex >= 0 && ['true', 'yes', '1', 'demo'].includes(String(row[demoIndex] ?? '').trim().toLowerCase());
-      readings.push({
-        id: `file-${fileId}-${rowIndex}`,
-        source: isDemo ? 'demo' : 'imported',
-        location,
-        temperature: parseFloat(calibratedTemp.toFixed(1)),
-        humidity: parseFloat(calibratedHumidity.toFixed(1)),
-        heatIndex: parseFloat(heatIndex.toFixed(2)),
-        status: this.getStatus(heatIndex),
-        quality: quality.label,
-        qualityClass: quality.class,
-        timestamp,
-        sourceFile,
-        isDemo
-      });
-    });
-    if (rows.length > 5001) skipped += rows.length - 5001;
-    return { readings, skipped };
   }
 
   escapeHTML(value) {
@@ -976,6 +856,10 @@ class SchoolHeatApp {
     const smsNumbers = document.getElementById('setting-sms-numbers');
     const languageSelect = document.getElementById('setting-language');
     const colorModeSelect = document.getElementById('setting-color-mode');
+    const paletteChoiceButtons = document.querySelectorAll('[data-palette-choice]');
+    const customAccentChoiceButtons = document.querySelectorAll('[data-custom-accent-choice]');
+    const anyColorPicker = document.getElementById('setting-any-color');
+    const resetPaletteButton = document.getElementById('setting-reset-palette');
     if (calTemp) calTemp.addEventListener('change', () => this.saveSettings());
     if (calHum) calHum.addEventListener('change', () => this.saveSettings());
     if (smsNumbers) smsNumbers.addEventListener('change', () => this.saveSettings());
@@ -988,6 +872,35 @@ class SchoolHeatApp {
       this.settings.colorMode = colorModeSelect.value;
       this.applyTheme();
       this.saveSettings();
+    });
+    paletteChoiceButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        this.settings.accentPalette = button.dataset.paletteChoice;
+        this.applyTheme();
+        this.saveSettings(false);
+      });
+    });
+    const applyCustomAccent = selectedAccent => {
+      if (!HEX_COLOR_PATTERN.test(selectedAccent || '')) {
+        console.error('Ignoring invalid custom color selection.');
+        return;
+      }
+      this.settings.accentPalette = 'custom';
+      this.settings.customAccentColor = selectedAccent;
+      ['dark', 'light'].forEach(theme => {
+        this.settings.customPaletteColors[theme] = createCustomPaletteColors(theme, selectedAccent);
+      });
+      this.applyTheme();
+      this.saveSettings(false);
+    };
+    customAccentChoiceButtons.forEach(button => {
+      button.addEventListener('click', () => applyCustomAccent(button.dataset.customAccentChoice));
+    });
+    if (anyColorPicker) anyColorPicker.addEventListener('change', () => applyCustomAccent(anyColorPicker.value));
+    if (resetPaletteButton) resetPaletteButton.addEventListener('click', () => {
+      this.settings.accentPalette = 'schoolheat';
+      this.applyTheme();
+      this.saveSettings(false);
     });
   }
 
@@ -1153,27 +1066,43 @@ class SchoolHeatApp {
   checkAlerts() {
     const banner = document.getElementById('alert-banner');
     const text = document.getElementById('alert-text');
-    if (!banner || !text) return;
     const latest = this.readings[0];
-    if (latest && (latest.status === 'danger' || latest.status === 'extreme')) {
-      text.textContent = `${STATUS_LABELS[latest.status]} heat at ${latest.location} — ${latest.heatIndex.toFixed(1)}°C`;
+    const readingStatus = latest && this.hasValidMeasurement(latest)
+      ? this.getStatus(Number(latest.heatIndex))
+      : null;
+    const isRecentHazard = Boolean(
+      latest &&
+      !latest.isDemo &&
+      ['danger', 'extreme'].includes(readingStatus) &&
+      this.getReadingFreshness(latest).state === 'recent'
+    );
+
+    if (banner && text && isRecentHazard) {
+      text.textContent = `${this.translateText('Recent high heat reading')}: ${STATUS_LABELS[readingStatus]} at ${latest.location} — ${Number(latest.heatIndex).toFixed(1)}°C · ${this.formatTime(latest.timestamp)}`;
       banner.style.display = 'flex';
-    } else {
+    } else if (banner) {
       banner.style.display = 'none';
     }
     if (!latest || latest.id === this.lastObservedReadingId) return;
 
-    const previous = this.readings.slice(1).find(reading => reading.location === latest.location);
-    const isHazard = latest.status === 'danger' || latest.status === 'extreme';
-    const wasHazard = previous && (previous.status === 'danger' || previous.status === 'extreme');
-    if (isHazard && (!wasHazard || previous.status !== latest.status)) {
-      const message = `HEAT WARNING: ${STATUS_LABELS[latest.status]} at ${latest.location} — ${latest.heatIndex.toFixed(1)}°C`;
+    this.lastObservedReadingId = latest.id;
+    if (!isRecentHazard) return;
+
+    const previous = this.readings.slice(1).find(reading =>
+      reading.location === latest.location &&
+      !reading.isDemo &&
+      this.hasValidMeasurement(reading) &&
+      this.getReadingFreshness(reading).state === 'recent'
+    );
+    const previousStatus = previous ? this.getStatus(Number(previous.heatIndex)) : null;
+    const wasHazard = ['danger', 'extreme'].includes(previousStatus);
+    if (!wasHazard || previousStatus !== readingStatus) {
+      const message = `HEAT WARNING: ${STATUS_LABELS[readingStatus]} at ${latest.location} — ${Number(latest.heatIndex).toFixed(1)}°C`;
       this.toast(message, 'error');
-      this.showBrowserNotification(message, `${STATUS_LABELS[latest.status]} heat warning`);
+      this.showBrowserNotification(message, `${STATUS_LABELS[readingStatus]} heat warning`);
       if (this.settings.pushAlerts) this.sendHeatPushAlert(latest);
       if (this.settings.smsAlerts) this.sendHeatSmsAlert(latest);
     }
-    this.lastObservedReadingId = latest.id;
   }
 
   async setBrowserNotifications(enabled) {
@@ -2403,7 +2332,7 @@ class SchoolHeatApp {
     const canvas = document.getElementById('monitor-gauge');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
@@ -2445,7 +2374,7 @@ class SchoolHeatApp {
     const maxVal = 55;
     const angle = Math.PI * 0.75 + (Math.min(value, maxVal) / maxVal) * (Math.PI * 1.5);
     const status = this.getStatus(value);
-    const color = STATUS_COLORS[status] || STATUS_COLORS.nodata;
+    const color = getStatusColor(status);
 
     ctx.save();
     ctx.shadowColor = color;
@@ -2522,16 +2451,52 @@ class SchoolHeatApp {
     const locationSummary = document.getElementById('dashboard-location-summary');
     const mapSummary = document.getElementById('dashboard-map-summary');
     const savedLocationCount = latestByLoc.size;
-    const mappedLocationCount = LOCATIONS.filter(location => latestByLoc.has(location.name)).length;
+    const mappedMarkerCount = LOCATIONS.filter(location => latestByLoc.has(location.name)).length;
+    const mappedPinCount = LOCATIONS.length;
+    const missingMappedCount = mappedPinCount - mappedMarkerCount;
     if (locationSummary) {
-      locationSummary.textContent = `${savedLocationCount} ${this.translateText('locations with saved readings, including demo data; not simultaneous campus coverage.')}`;
+      locationSummary.textContent = `${savedLocationCount} ${this.translateText(savedLocationCount === 1
+        ? 'location with a saved reading.'
+        : 'locations with saved readings.')}`;
     }
     if (mapSummary) {
-      mapSummary.textContent = mappedLocationCount
-        ? `${mappedLocationCount} ${this.translateText(mappedLocationCount === 1
-          ? 'mapped location has saved readings, including demo data. Locations without readings remain unclassified.'
-          : 'mapped locations have saved readings, including demo data. Locations without readings remain unclassified.')}`
-        : this.translateText('No saved readings are available for the mapped locations yet.');
+      mapSummary.textContent = mappedMarkerCount
+        ? `${mappedMarkerCount} ${this.translateText(mappedMarkerCount === 1
+          ? 'mapped pin has a saved reading, including demo data. Pins without readings remain unclassified.'
+          : 'mapped pins have saved readings, including demo data. Pins without readings remain unclassified.')}`
+        : this.translateText('No saved readings are available for any mapped pin yet.');
+    }
+
+    const coverageCount = document.getElementById('dashboard-coverage-count');
+    const coverageTotal = document.getElementById('dashboard-coverage-total');
+    const coverageMissing = document.getElementById('dashboard-coverage-missing');
+    const coverageMeter = document.getElementById('dashboard-coverage-meter');
+    const coverageFill = document.getElementById('dashboard-coverage-fill');
+    if (coverageCount) coverageCount.textContent = String(mappedMarkerCount);
+    if (coverageTotal) coverageTotal.textContent = String(mappedPinCount);
+    if (coverageMissing) {
+      coverageMissing.textContent = `${missingMappedCount} ${this.translateText(
+        missingMappedCount === 1 ? 'map pin has no saved reading' : 'map pins have no saved readings'
+      )}`;
+    }
+    if (coverageMeter) {
+      coverageMeter.setAttribute('aria-valuemin', '0');
+      coverageMeter.setAttribute('aria-valuemax', String(mappedPinCount));
+      coverageMeter.setAttribute('aria-valuenow', String(mappedMarkerCount));
+      coverageMeter.setAttribute(
+        'aria-valuetext',
+        `${mappedMarkerCount} / ${mappedPinCount} ${this.translateText('map pins with saved readings')}`
+      );
+    }
+    if (coverageFill) {
+      coverageFill.style.transform = `scaleX(${mappedPinCount ? mappedMarkerCount / mappedPinCount : 0})`;
+    }
+
+    const aboutPinCount = document.getElementById('about-map-pin-count');
+    const dashboardMapSiteCount = document.getElementById('dashboard-map-site-count');
+    if (aboutPinCount) aboutPinCount.textContent = String(mappedPinCount);
+    if (dashboardMapSiteCount) {
+      dashboardMapSiteCount.textContent = `${mappedPinCount} ${this.translateText('map pins')}`;
     }
   }
 
@@ -2558,8 +2523,11 @@ class SchoolHeatApp {
     if (dashboardLastUpdate) dashboardLastUpdate.textContent = latest ? this.formatTime(latest.timestamp) : 'No reading recorded';
     if (dashboardLatestLocation) dashboardLatestLocation.textContent = latest ? latest.location : '—';
     if (latest && this.hasValidMeasurement(latest)) {
-      const source = document.getElementById('latest-source');
-      if (source) source.textContent = this.getReadingSourceLabel(latest);
+      const demoLabel = document.getElementById('latest-demo-label');
+      if (demoLabel) {
+        demoLabel.hidden = !latest.isDemo;
+        demoLabel.textContent = latest.isDemo ? this.translateText('DEMO DATA') : '';
+      }
       document.getElementById('gauge-value').textContent = latest.heatIndex.toFixed(1);
       document.getElementById('latest-location').textContent = latest.location;
       document.getElementById('latest-time').textContent = this.formatTime(latest.timestamp);
@@ -2572,8 +2540,11 @@ class SchoolHeatApp {
       stEl.className = 'status-pill ' + status;
       this.drawGauge(latest.heatIndex);
     } else {
-      const source = document.getElementById('latest-source');
-      if (source) source.textContent = latest ? this.getReadingSourceLabel(latest) : 'No source information';
+      const demoLabel = document.getElementById('latest-demo-label');
+      if (demoLabel) {
+        demoLabel.hidden = !latest?.isDemo;
+        demoLabel.textContent = latest?.isDemo ? this.translateText('DEMO DATA') : '';
+      }
       document.getElementById('gauge-value').textContent = '—';
       document.getElementById('latest-location').textContent = '—';
       document.getElementById('latest-time').textContent = '—';
@@ -2605,7 +2576,7 @@ class SchoolHeatApp {
             <div class="activity-dot ${r.status}"></div>
             <div class="activity-info">
               <div class="activity-loc">${this.escapeHTML(r.location)}</div>
-              <div class="activity-meta">${this.formatTime(r.timestamp)} • ${r.temperature.toFixed(1)}°C / ${r.humidity.toFixed(1)}% • ${this.escapeHTML(this.getReadingSourceLabel(r))}</div>
+              <div class="activity-meta">${this.formatTime(r.timestamp)} • ${r.temperature.toFixed(1)}°C / ${r.humidity.toFixed(1)}%${r.isDemo ? ` • ${this.translateText('DEMO DATA')}` : ''}</div>
             </div>
             <div class="activity-hi ${r.status}">${r.heatIndex.toFixed(1)}°C</div>
           </div>
@@ -2613,23 +2584,97 @@ class SchoolHeatApp {
       }
     }
 
-    this.renderAlertHistory();
     this.checkAlerts();
     this.updateRecentLocations();
     this.updateMonitorGauge();
     this.renderSensorTrust();
-    this.renderDashboardForecast();
+    this.scheduleDashboardForecastRender();
   }
 
-  renderDashboardForecast() {
+  setupDashboardForecastObserver() {
+    const card = document.querySelector('.forecast-preview-card');
+    if (!card) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      this.dashboardForecastVisibilityHandler = () => this.scheduleDashboardForecastRender();
+      window.addEventListener('scroll', this.dashboardForecastVisibilityHandler, { passive: true });
+      window.addEventListener('resize', this.dashboardForecastVisibilityHandler);
+      return;
+    }
+
+    this.dashboardForecastObserver = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) this.scheduleDashboardForecastRender();
+    }, { rootMargin: '200px 0px' });
+    this.dashboardForecastObserver.observe(card);
+  }
+
+  scheduleDashboardForecastRender() {
+    if (this.currentTab !== 'dashboard' || this.dashboardForecastRenderScheduled) return;
+    const card = document.querySelector('.forecast-preview-card');
+    if (!card) return;
+    const isNearViewport = () => {
+      const rect = card.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      return rect.width > 0 && rect.bottom >= -200 && rect.top <= viewportHeight + 200;
+    };
+    if (!isNearViewport()) return;
+
+    this.dashboardForecastRenderScheduled = true;
+    const render = () => {
+      this.dashboardForecastRenderScheduled = false;
+      if (this.currentTab === 'dashboard' && isNearViewport()) {
+        const renderPromise = this.renderDashboardForecast();
+        if (renderPromise && typeof renderPromise.catch === 'function') {
+          renderPromise.catch(error => {
+            console.error('Could not render the dashboard forecast:', error);
+            this.toast(`Forecast calculation failed: ${error.message}`, 'error');
+          });
+        }
+      }
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(render, { timeout: 1500 });
+    } else {
+      window.setTimeout(render, 250);
+    }
+  }
+
+  async renderDashboardForecast() {
     const empty = document.getElementById('dashboard-forecast-empty');
     const emptyTitle = document.getElementById('dashboard-forecast-empty-title');
     const emptyDetail = document.getElementById('dashboard-forecast-empty-detail');
     const content = document.getElementById('dashboard-forecast-content');
     const canvas = document.getElementById('dashboard-forecast-chart');
+    const action = document.getElementById('dashboard-forecast-action');
+    const actionLabel = document.getElementById('dashboard-forecast-action-label');
     if (!empty || !content || !canvas) return;
+    const setAction = (label, tab) => {
+      if (actionLabel) actionLabel.textContent = this.translateText(label);
+      if (action) action.onclick = () => this.switchTab(tab);
+    };
 
-    const forecast = this.buildForecastComparison();
+    const historyData = this.getMinuteForecastHistory();
+    const current = historyData.history[historyData.history.length - 1];
+    const now = Date.now();
+    if (current) {
+      const forecastAge = now - current.minute * 60000;
+      if (!Number.isFinite(forecastAge) ||
+        forecastAge > STALE_READING_AFTER_MS ||
+        forecastAge < -2 * 60000 ||
+        (current.minute + 30) * 60000 <= now) {
+        empty.hidden = false;
+        content.hidden = true;
+        if (emptyTitle) emptyTitle.textContent = this.translateText('No recent sensor reading');
+        if (emptyDetail) {
+          emptyDetail.textContent = this.translateText('The last real reading is too old. Sync the sensor for a new forecast.');
+        }
+        setAction('Open Sensor Monitor', 'monitor');
+        canvas.setAttribute('aria-label', 'A forecast is unavailable because there is no recent sensor reading.');
+        return;
+      }
+    }
+
+    const forecast = await this.buildForecastComparison(historyData);
+    if (this.currentTab !== 'dashboard') return;
     const best = forecast ? this.getBestForecastModel(forecast) : null;
     if (!forecast || !best?.result || !Number.isFinite(best.result.value)) {
       empty.hidden = false;
@@ -2638,27 +2683,14 @@ class SchoolHeatApp {
       if (emptyDetail) {
         emptyDetail.textContent = this.translateText('At least 12 complete same-location examples from non-demo readings are needed. No prediction is shown until the data supports one.');
       }
+      setAction('View forecast details', 'forecast');
       canvas.setAttribute('aria-label', 'Forecast unavailable because there is not enough eligible data.');
-      return;
-    }
-
-    const forecastAge = Date.now() - forecast.current.minute * 60000;
-    if (!Number.isFinite(forecastAge) ||
-      forecastAge > STALE_READING_AFTER_MS ||
-      forecastAge < -2 * 60000 ||
-      forecast.date.getTime() <= Date.now()) {
-      empty.hidden = false;
-      content.hidden = true;
-      if (emptyTitle) emptyTitle.textContent = this.translateText('Forecast is not current');
-      if (emptyDetail) {
-        emptyDetail.textContent = this.translateText('The latest eligible same-location reading is too old for a current outlook. No forecast is shown.');
-      }
-      canvas.setAttribute('aria-label', 'A current forecast is unavailable because the latest eligible reading is not recent.');
       return;
     }
 
     empty.hidden = true;
     content.hidden = false;
+    setAction('View forecast details', 'forecast');
     const status = best.result.status;
     const value = document.getElementById('dashboard-forecast-value');
     const statusElement = document.getElementById('dashboard-forecast-status');
@@ -2686,7 +2718,7 @@ class SchoolHeatApp {
     const rect = canvas.getBoundingClientRect();
     if (!context || !rect.width || !rect.height) return;
 
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(rect.width * ratio);
     canvas.height = Math.round(rect.height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -2698,6 +2730,10 @@ class SchoolHeatApp {
     const chartHeight = height - padding.top - padding.bottom;
     const points = forecast.history.filter(point =>
       Number.isFinite(point.minute) && Number.isFinite(point.value));
+    const chartLine = getDesignToken('--chart-line', '#17685e');
+    const predictionColor = getDesignToken('--chart-prediction', '#a64f36');
+    const chartGrid = getDesignToken('--chart-grid', 'rgba(28, 48, 44, 0.14)');
+    const chartLabel = getDesignToken('--chart-label', '#53675f');
     const values = [...points.map(point => point.value), prediction.value];
     const minimum = Math.min(...values) - 1;
     const maximum = Math.max(...values) + 1;
@@ -2713,12 +2749,12 @@ class SchoolHeatApp {
     for (let index = 0; index <= 2; index++) {
       const value = maximum - (valueRange * index / 2);
       const lineY = y(value);
-      context.strokeStyle = 'rgba(255,255,255,0.1)';
+      context.strokeStyle = chartGrid;
       context.beginPath();
       context.moveTo(padding.left, lineY);
       context.lineTo(width - padding.right, lineY);
       context.stroke();
-      context.fillStyle = 'rgba(220,232,245,0.62)';
+      context.fillStyle = chartLabel;
       context.fillText(`${value.toFixed(0)}°`, padding.left - 7, lineY);
     }
 
@@ -2731,7 +2767,7 @@ class SchoolHeatApp {
         if (index === 0) context.moveTo(pointX, pointY);
         else context.lineTo(pointX, pointY);
       });
-      context.strokeStyle = '#22d3ee';
+      context.strokeStyle = chartLine;
       context.lineWidth = 2.5;
       context.lineJoin = 'round';
       context.stroke();
@@ -2741,14 +2777,14 @@ class SchoolHeatApp {
     context.setLineDash([5, 4]);
     context.moveTo(x(currentPoint.minute), y(currentPoint.value));
     context.lineTo(x(forecast.current.minute + 30), y(prediction.value));
-    context.strokeStyle = '#fb923c';
+    context.strokeStyle = predictionColor;
     context.lineWidth = 2.5;
     context.stroke();
     context.setLineDash([]);
 
     [
-      { minute: currentPoint.minute, value: currentPoint.value, color: '#22d3ee' },
-      { minute: forecast.current.minute + 30, value: prediction.value, color: '#fb923c' }
+      { minute: currentPoint.minute, value: currentPoint.value, color: chartLine },
+      { minute: forecast.current.minute + 30, value: prediction.value, color: predictionColor }
     ].forEach(point => {
       context.beginPath();
       context.arc(x(point.minute), y(point.value), 3.5, 0, Math.PI * 2);
@@ -2758,7 +2794,7 @@ class SchoolHeatApp {
 
     context.textAlign = 'center';
     context.textBaseline = 'top';
-    context.fillStyle = 'rgba(220,232,245,0.62)';
+    context.fillStyle = chartLabel;
     context.fillText('−30 min', padding.left, height - 15);
     context.fillText('Now', x(forecast.current.minute), height - 15);
     context.fillText('+30 min', width - padding.right, height - 15);
@@ -2766,36 +2802,6 @@ class SchoolHeatApp {
       'aria-label',
       `Recorded Heat Index is ${forecast.current.value.toFixed(1)} degrees Celsius at ${forecast.location}; the forecast for ${this.formatTime(forecast.date.toISOString())} is ${prediction.value.toFixed(1)} degrees Celsius.`
     );
-  }
-
-  renderAlertHistory() {
-    const list = document.getElementById('alert-history-list');
-    if (!list) return;
-    const riskReadings = this.readings
-      .filter(reading => reading.status === 'danger' || reading.status === 'extreme')
-      .slice(0, 8);
-
-    if (riskReadings.length === 0) {
-      list.innerHTML = '<div class="alert-history-empty">No Hinga or Hinto readings are recorded on this device.</div>';
-      return;
-    }
-
-    list.innerHTML = riskReadings.map(reading => {
-      const label = STATUS_LABELS[reading.status];
-      const source = reading.isDemo ? 'DEMO DATA' : 'RECORDED';
-      return `
-        <div class="alert-history-item ${reading.status}">
-          <span class="alert-history-level">${this.escapeHTML(label)}</span>
-          <div class="alert-history-reading">
-            <strong>${this.escapeHTML(reading.location)}</strong>
-            <span>${this.formatTime(reading.timestamp)} · ${source}</span>
-          </div>
-          <div class="alert-history-value">
-            <strong>${reading.heatIndex.toFixed(1)}°C</strong>
-            <span>Delivery not logged</span>
-          </div>
-        </div>`;
-    }).join('');
   }
 
   animateCounter(el, from, to) {
@@ -2815,17 +2821,29 @@ class SchoolHeatApp {
     const canvas = document.getElementById('gauge-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const size = canvas.width;
-    const center = size / 2;
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width || canvas.clientWidth || 240;
+    const height = rect.height || canvas.clientHeight || 240;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.scale(dpr, dpr);
+
+    const size = Math.min(width, height);
+    const centerX = width / 2;
+    const centerY = height / 2;
     const radius = size * 0.38;
     const lineWidth = size * 0.055;
-    ctx.clearRect(0, 0, size, size);
+    ctx.clearRect(0, 0, width, height);
+    const maxVal = 50;
+    const startAngle = Math.PI * 0.8;
+    const sweep = Math.PI * 1.4;
 
     ctx.save();
-    ctx.shadowColor = 'rgba(59, 130, 246, 0.25)';
+    ctx.shadowColor = getDesignToken('--chart-glow', 'rgba(23, 104, 94, 0.28)');
     ctx.shadowBlur = 16;
     ctx.beginPath();
-    ctx.arc(center, center, radius, Math.PI * 0.8, Math.PI * 2.2);
+    ctx.arc(centerX, centerY, radius, startAngle, startAngle + sweep);
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
     ctx.lineWidth = lineWidth;
     ctx.lineCap = 'round';
@@ -2833,14 +2851,20 @@ class SchoolHeatApp {
     ctx.restore();
 
     const segments = [
-      { start: Math.PI * 0.8, end: Math.PI * 1.1, color: STATUS_COLORS.safe },
-      { start: Math.PI * 1.1, end: Math.PI * 1.4, color: STATUS_COLORS.caution },
-      { start: Math.PI * 1.4, end: Math.PI * 1.7, color: STATUS_COLORS.danger },
-      { start: Math.PI * 1.7, end: Math.PI * 2.2, color: STATUS_COLORS.extreme }
+      { start: 0, end: 27, color: getStatusColor('safe') },
+      { start: 27, end: 33, color: getStatusColor('caution') },
+      { start: 33, end: 42, color: getStatusColor('danger') },
+      { start: 42, end: maxVal, color: getStatusColor('extreme') }
     ];
     segments.forEach(seg => {
       ctx.beginPath();
-      ctx.arc(center, center, radius, seg.start, seg.end);
+      ctx.arc(
+        centerX,
+        centerY,
+        radius,
+        startAngle + (seg.start / maxVal) * sweep,
+        startAngle + (seg.end / maxVal) * sweep
+      );
       ctx.strokeStyle = seg.color;
       ctx.lineWidth = lineWidth * 0.5;
       ctx.lineCap = 'round';
@@ -2849,16 +2873,15 @@ class SchoolHeatApp {
       ctx.globalAlpha = 1;
     });
 
-    const maxVal = 50;
-    const angle = Math.PI * 0.8 + (Math.min(value, maxVal) / maxVal) * (Math.PI * 1.4);
+    const angle = startAngle + (Math.min(value, maxVal) / maxVal) * sweep;
     const status = this.getStatus(value);
-    const color = STATUS_COLORS[status] || STATUS_COLORS.nodata;
+    const color = getStatusColor(status);
 
     ctx.save();
     ctx.shadowColor = color;
     ctx.shadowBlur = 12;
     ctx.beginPath();
-    ctx.arc(center, center, radius, Math.PI * 0.8, angle);
+    ctx.arc(centerX, centerY, radius, startAngle, angle);
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
     ctx.lineCap = 'round';
@@ -2867,44 +2890,57 @@ class SchoolHeatApp {
 
     if (value > 0) {
       const needleLen = radius - 6;
-      const nx = center + Math.cos(angle) * needleLen;
-      const ny = center + Math.sin(angle) * needleLen;
+      const nx = centerX + Math.cos(angle) * needleLen;
+      const ny = centerY + Math.sin(angle) * needleLen;
       ctx.save();
       ctx.shadowColor = color;
       ctx.shadowBlur = 8;
       ctx.beginPath();
-      ctx.moveTo(center, center);
+      ctx.moveTo(centerX, centerY);
       ctx.lineTo(nx, ny);
       ctx.strokeStyle = color;
       ctx.lineWidth = 2.5;
       ctx.lineCap = 'round';
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(center, center, 4, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.restore();
     }
   }
 
-  renderHistory() {
+  renderHistory(updateCharts = true) {
     const list = document.getElementById('history-list');
+    if (!list || this.currentTab !== 'history') return;
+    if (this.historyFilterTimer) {
+      window.clearTimeout(this.historyFilterTimer);
+      this.historyFilterTimer = null;
+    }
     const search = document.getElementById('history-search')?.value.toLowerCase() || '';
     const filter = document.getElementById('history-filter')?.value || 'all';
-    if (!list) return;
-
-    let filtered = this.readings;
-    if (search) {
-      filtered = filtered.filter(r =>
-        r.location.toLowerCase().includes(search) ||
-        r.status.toLowerCase().includes(search)
-      );
+    const hasFilters = Boolean(search) || filter !== 'all';
+    const matches = [];
+    if (hasFilters) {
+      this.readings.forEach((reading, index) => {
+        const location = String(reading.location || '').toLowerCase();
+        const status = String(reading.status || '').toLowerCase();
+        if (search && !location.includes(search) && !status.includes(search)) return;
+        if (filter !== 'all' && reading.status !== filter) return;
+        matches.push({ reading, index });
+      });
     }
-    if (filter !== 'all') {
-      filtered = filtered.filter(r => r.status === filter);
-    }
 
-    if (filtered.length === 0) {
+    const total = hasFilters ? matches.length : this.readings.length;
+    const pageCount = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
+    this.historyPage = Math.max(0, Math.min(this.historyPage, pageCount - 1));
+    const start = this.historyPage * HISTORY_PAGE_SIZE;
+    const visible = hasFilters
+      ? matches.slice(start, start + HISTORY_PAGE_SIZE)
+      : this.readings.slice(start, start + HISTORY_PAGE_SIZE)
+        .map((reading, offset) => ({ reading, index: start + offset }));
+
+    if (total === 0) {
       list.innerHTML = `
         <div class="empty-state">
           <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
@@ -2912,7 +2948,14 @@ class SchoolHeatApp {
           <div class="empty-desc">Try adjusting your search or filters</div>
         </div>`;
     } else {
-      list.innerHTML = filtered.map((r, i) => `
+      const pagination = pageCount > 1
+        ? `<nav class="history-pagination" aria-label="${this.translateText('Reading history pages')}">
+            <button class="btn-secondary" type="button" data-history-page="-1" aria-label="${this.translateText('Previous page')}" ${this.historyPage === 0 ? 'disabled' : ''}>‹</button>
+            <span aria-live="polite">${this.historyPage + 1} / ${pageCount}</span>
+            <button class="btn-secondary" type="button" data-history-page="1" aria-label="${this.translateText('Next page')}" ${this.historyPage === pageCount - 1 ? 'disabled' : ''}>›</button>
+          </nav>`
+        : '';
+      list.innerHTML = `${visible.map(({ reading: r, index }, i) => `
         <div class="history-item" style="animation-delay:${Math.min(i*0.03,0.4)}s">
           <div class="history-pin ${r.status}">${r.heatIndex.toFixed(0)}</div>
           <div class="history-info">
@@ -2924,7 +2967,7 @@ class SchoolHeatApp {
             <div class="history-meta">
               <span>${r.temperature.toFixed(1)}°C</span>
               <span>${r.humidity.toFixed(1)}%</span>
-              <span class="history-source">${this.escapeHTML(this.getReadingSourceLabel(r))}</span>
+              ${r.isDemo ? `<span class="history-source">${this.translateText('DEMO DATA')}</span>` : ''}
               ${r.quality ? `<span class="quality-badge ${r.qualityClass}">Data quality: ${r.quality}</span>` : ''}
             </div>
           </div>
@@ -2932,17 +2975,19 @@ class SchoolHeatApp {
             <div class="history-hi ${r.status}">${r.heatIndex.toFixed(1)}°C</div>
             <div class="history-status ${r.status}">${STATUS_LABELS[r.status] || 'Unknown'}</div>
           </div>
-          <button class="history-delete-button" type="button" data-delete-reading-index="${this.readings.indexOf(r)}" aria-label="Delete reading from ${this.escapeHTML(r.location)} on ${this.formatTime(r.timestamp)}" title="Delete this reading">
+          <button class="history-delete-button" type="button" data-delete-reading-index="${index}" aria-label="Delete reading from ${this.escapeHTML(r.location)} on ${this.formatTime(r.timestamp)}" title="Delete this reading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>
           </button>
         </div>
-      `).join('');
+      `).join('')}${pagination}`;
     }
 
-    this.drawDistributionChart();
-    if (this.currentTab === 'history') {
-      this.trendActiveIndex = null;
-      this.drawTrendChart();
+    if (updateCharts) {
+      this.drawDistributionChart();
+      if (this.currentTab === 'history') {
+        this.trendActiveIndex = null;
+        this.drawTrendChart();
+      }
     }
   }
 
@@ -2953,14 +2998,19 @@ class SchoolHeatApp {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
-  askKnowledgeAssistant() {
+  async askKnowledgeAssistant() {
     const input = document.getElementById('knowledge-question');
     const output = document.getElementById('knowledge-answer');
     if (!input || !output) return;
-    output.textContent = this.answerKnowledgeQuestion(input.value);
+    try {
+      output.textContent = await this.answerKnowledgeQuestion(input.value);
+    } catch (error) {
+      console.error('Could not answer the SchoolHeat question:', error);
+      output.textContent = `SchoolHeat could not complete this answer: ${error.message}`;
+    }
   }
 
-  answerKnowledgeQuestion(question) {
+  async answerKnowledgeQuestion(question) {
     const query = String(question || '').trim().toLowerCase();
     if (!query) return 'Enter a question about stored readings or SchoolHeat.';
 
@@ -3024,7 +3074,7 @@ class SchoolHeatApp {
     }
 
     if (query.includes('forecast') || query.includes('prediction')) {
-      const result = this.buildForecastComparison();
+      const result = await this.buildForecastComparison();
       if (!result) {
         return 'No forecast is available. The existing model needs at least 12 complete same-location, non-demo 30-minute examples; gaps can extend the collection period.';
       }
@@ -3111,7 +3161,12 @@ class SchoolHeatApp {
   }
 
   filterHistory() {
-    this.renderHistory();
+    this.historyPage = 0;
+    if (this.historyFilterTimer) window.clearTimeout(this.historyFilterTimer);
+    this.historyFilterTimer = window.setTimeout(() => {
+      this.historyFilterTimer = null;
+      this.renderHistory(false);
+    }, 120);
   }
 
   deleteReading(index) {
@@ -3161,7 +3216,19 @@ class SchoolHeatApp {
     const tooltip = document.getElementById('trend-tooltip');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
+    const chartLine = getDesignToken('--chart-line', '#17685e');
+    const chartGlow = getDesignToken('--chart-glow', 'rgba(23, 104, 94, 0.28)');
+    const chartFillTop = getDesignToken('--chart-fill-top', 'rgba(23, 104, 94, 0.17)');
+    const chartFillBottom = getDesignToken('--chart-fill-bottom', 'rgba(23, 104, 94, 0)');
+    const chartGrid = getDesignToken('--chart-grid', 'rgba(28, 48, 44, 0.14)');
+    const chartLabel = getDesignToken('--chart-label', '#53675f');
+    const statusColors = {
+      safe: getStatusColor('safe'),
+      caution: getStatusColor('caution'),
+      danger: getStatusColor('danger'),
+      extreme: getStatusColor('extreme')
+    };
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
@@ -3176,22 +3243,32 @@ class SchoolHeatApp {
     ctx.clearRect(0, 0, w, h);
 
     if (this.readings.length < 2) {
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = chartLabel;
       ctx.font = '12px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Add at least 2 readings to see the trend', w/2, h/2);
       return;
     }
 
-    const byDate = {};
-    this.readings.slice().reverse().forEach(r => {
-      const d = new Date(r.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      if (!byDate[d]) byDate[d] = { sum: 0, count: 0 };
-      byDate[d].sum += r.heatIndex;
-      byDate[d].count++;
+    const byDate = new Map();
+    for (const reading of this.readings) {
+      const dateKey = this.getLocalDateKey(reading.timestamp);
+      if (!dateKey) continue;
+      if (!byDate.has(dateKey) && byDate.size === 10) break;
+      const aggregate = byDate.get(dateKey) || { sum: 0, count: 0 };
+      aggregate.sum += reading.heatIndex;
+      aggregate.count++;
+      byDate.set(dateKey, aggregate);
+    }
+    const dates = Array.from(byDate.keys()).reverse();
+    const labels = dates.map(dateKey => {
+      const [year, month, day] = dateKey.split('-').map(Number);
+      return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     });
-    const labels = Object.keys(byDate).slice(-10);
-    const data = labels.map(d => byDate[d].sum / byDate[d].count);
+    const data = dates.map(dateKey => {
+      const aggregate = byDate.get(dateKey);
+      return aggregate.sum / aggregate.count;
+    });
 
     let maxVal = Math.max(...data, 45);
     let minVal = Math.min(...data, 20);
@@ -3201,7 +3278,7 @@ class SchoolHeatApp {
     minVal = Math.floor(minVal / step) * step;
     const niceRange = maxVal - minVal || 1;
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = chartGrid;
     ctx.lineWidth = 1;
     const gridCount = Math.round(niceRange / step);
     for (let i = 0; i <= gridCount; i++) {
@@ -3211,7 +3288,7 @@ class SchoolHeatApp {
       ctx.moveTo(pad.left, y);
       ctx.lineTo(pad.left + chartW, y);
       ctx.stroke();
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = chartLabel;
       ctx.font = '10px JetBrains Mono, monospace';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
@@ -3221,7 +3298,7 @@ class SchoolHeatApp {
     ctx.beginPath();
     ctx.moveTo(pad.left, pad.top + chartH);
     ctx.lineTo(pad.left + chartW, pad.top + chartH);
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.strokeStyle = chartGrid;
     ctx.lineWidth = 1;
     ctx.stroke();
 
@@ -3229,7 +3306,7 @@ class SchoolHeatApp {
     ctx.textBaseline = 'top';
     labels.forEach((label, i) => {
       const x = pad.left + (chartW / (labels.length - 1)) * i;
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = chartLabel;
       ctx.font = '9px Inter, sans-serif';
       ctx.fillText(label, x, pad.top + chartH + 10);
     });
@@ -3243,8 +3320,8 @@ class SchoolHeatApp {
     }));
 
     const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-    grad.addColorStop(0, 'rgba(59, 130, 246, 0.18)');
-    grad.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+    grad.addColorStop(0, chartFillTop);
+    grad.addColorStop(1, chartFillBottom);
 
     ctx.beginPath();
     ctx.moveTo(points[0].x, pad.top + chartH);
@@ -3255,8 +3332,8 @@ class SchoolHeatApp {
     ctx.fill();
 
     ctx.save();
-    ctx.shadowColor = 'rgba(59, 130, 246, 0.35)';
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = chartGlow;
+    ctx.shadowBlur = 8;
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length; i++) {
@@ -3268,7 +3345,7 @@ class SchoolHeatApp {
       const cp2y = curr.y;
       ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, curr.x, curr.y);
     }
-    ctx.strokeStyle = '#3b82f6';
+    ctx.strokeStyle = chartLine;
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -3283,7 +3360,7 @@ class SchoolHeatApp {
       ctx.beginPath();
       ctx.moveTo(activePoint.x, pad.top);
       ctx.lineTo(activePoint.x, pad.top + chartH);
-      ctx.strokeStyle = 'rgba(59,130,246,0.55)';
+      ctx.strokeStyle = chartLine;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.stroke();
@@ -3291,7 +3368,7 @@ class SchoolHeatApp {
     }
 
     points.forEach((p, index) => {
-      const color = STATUS_COLORS[p.status];
+      const color = statusColors[p.status];
       ctx.save();
       ctx.shadowColor = color;
       ctx.shadowBlur = 8;
@@ -3377,7 +3454,13 @@ class SchoolHeatApp {
     const canvas = document.getElementById('distribution-chart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
+    const statusColors = {
+      safe: getStatusColor('safe'),
+      caution: getStatusColor('caution'),
+      danger: getStatusColor('danger'),
+      extreme: getStatusColor('extreme')
+    };
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
@@ -3398,7 +3481,7 @@ class SchoolHeatApp {
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
     if (total === 0) {
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = getDesignToken('--chart-label', '#53675f');
       ctx.font = '12px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('No data yet', centerX, centerY);
@@ -3412,7 +3495,7 @@ class SchoolHeatApp {
       if (count === 0) return;
       const slice = (count / total) * Math.PI * 2;
       const endAngle = startAngle + slice;
-      const color = STATUS_COLORS[status];
+      const color = statusColors[status];
 
       ctx.save();
       ctx.shadowColor = color;
@@ -3428,12 +3511,12 @@ class SchoolHeatApp {
       startAngle = endAngle;
     });
 
-    ctx.fillStyle = '#f0f0f5';
+    ctx.fillStyle = getDesignToken('--text-primary', '#1c302c');
     ctx.font = 'bold 18px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(total.toString(), centerX, centerY - 5);
-    ctx.fillStyle = '#6b7280';
+    ctx.fillStyle = getDesignToken('--chart-label', '#53675f');
     ctx.font = '10px Inter, sans-serif';
     ctx.fillText('Readings', centerX, centerY + 10);
 
@@ -3443,7 +3526,7 @@ class SchoolHeatApp {
         const pct = total > 0 ? Math.round((counts[s] / total) * 100) : 0;
         return `
           <div class="dist-legend-item">
-            <span style="background:${STATUS_COLORS[s]}"></span>
+            <span style="background:${statusColors[s]}"></span>
             <span>${STATUS_LABELS[s]}</span>
             <span class="dist-count">${counts[s]} (${pct}%)</span>
           </div>
@@ -3831,12 +3914,16 @@ class SchoolHeatApp {
     return current + boundedDelta * 10;
   }
 
-  evaluateForecastModels(examples) {
+  async evaluateForecastModels(examples) {
     const modelNames = [...FORECAST_CANDIDATE_MODELS, 'persistence'];
     const errors = Object.fromEntries(modelNames.map(name => [name, []]));
     const candidates = [];
+    let trainingEnd = 0;
     examples.forEach(example => {
-      const training = examples.filter(prior => prior.minute + 32 <= example.minute).slice(-120);
+      while (trainingEnd < examples.length && examples[trainingEnd].minute + 32 <= example.minute) {
+        trainingEnd++;
+      }
+      const training = examples.slice(Math.max(0, trainingEnd - 120), trainingEnd);
       if (training.length >= 12) candidates.push({ example, training });
     });
 
@@ -3848,7 +3935,7 @@ class SchoolHeatApp {
       }
     }
 
-    validationFolds.reverse().forEach(({ example, training }) => {
+    for (const { example, training } of validationFolds.reverse()) {
       const seed = this.getForecastSeed(training);
       modelNames.forEach(modelName => {
         const predict = this.fitForecastModel(modelName, training, seed);
@@ -3868,7 +3955,8 @@ class SchoolHeatApp {
           minute: example.minute
         });
       });
-    });
+      await new Promise(resolve => window.setTimeout(resolve, 0));
+    }
 
     return Object.fromEntries(modelNames.map(modelName => {
       const modelErrors = errors[modelName];
@@ -3935,42 +4023,57 @@ class SchoolHeatApp {
     };
   }
 
-  buildForecastComparison() {
-    const { location, history, byMinute } = this.getMinuteForecastHistory();
+  async buildForecastComparison(historyData = this.getMinuteForecastHistory()) {
+    const { location, history, byMinute } = historyData;
     if (history.length === 0) return null;
     const current = history[history.length - 1];
     const historySignature = history.reduce((signature, point) =>
       (signature * 31 + point.minute + Math.round(point.value * 100)) >>> 0, 7);
     const cacheKey = `${location}:${current.minute}:${history.length}:${historySignature}`;
-    if (this.forecastComparisonCache?.key === cacheKey) return this.forecastComparisonCache.result;
+    if (this.forecastComparisonCache?.key === cacheKey) {
+      if (this.forecastComparisonCache.result) return this.forecastComparisonCache.result;
+      if (this.forecastComparisonCache.promise) return this.forecastComparisonCache.promise;
+    }
     const latestFeatures = this.getForecastFeatures(byMinute, current.minute);
     const examples = this.getForecastExamples(history, byMinute);
     if (!latestFeatures || examples.length < 12) return null;
 
     const training = examples.slice(-180);
     const seed = this.getForecastSeed(training);
-    const models = {};
-    FORECAST_CANDIDATE_MODELS.forEach(modelName => {
-      const modelFeatures = modelName === 'mlr'
-        ? this.getExtendedMlrFeatures(latestFeatures)
-        : latestFeatures;
-      const predict = this.fitForecastModel(modelName, training, seed);
-      const value = this.predictForecastValue(predict, modelFeatures, current.value, training);
-      models[modelName] = { value, status: this.getStatus(value) };
-    });
+    const cacheEntry = { key: cacheKey, result: null, promise: null };
+    const calculation = (async () => {
+      const models = {};
+      for (const modelName of FORECAST_CANDIDATE_MODELS) {
+        const modelFeatures = modelName === 'mlr'
+          ? this.getExtendedMlrFeatures(latestFeatures)
+          : latestFeatures;
+        const predict = this.fitForecastModel(modelName, training, seed);
+        const value = this.predictForecastValue(predict, modelFeatures, current.value, training);
+        models[modelName] = { value, status: this.getStatus(value) };
+        await new Promise(resolve => window.setTimeout(resolve, 0));
+      }
 
-    const result = {
-      location,
-      history: history.filter(point => point.minute >= current.minute - 30 && point.minute <= current.minute),
-      current,
-      date: new Date((current.minute + 30) * 60000),
-      generatedAt: new Date(),
-      trainingSamples: training.length,
-      models,
-      metrics: this.evaluateForecastModels(examples)
-    };
-    this.forecastComparisonCache = { key: cacheKey, result };
-    return result;
+      const result = {
+        location,
+        history: history.filter(point => point.minute >= current.minute - 30 && point.minute <= current.minute),
+        current,
+        date: new Date((current.minute + 30) * 60000),
+        generatedAt: new Date(),
+        trainingSamples: training.length,
+        models,
+        metrics: await this.evaluateForecastModels(examples)
+      };
+      if (this.forecastComparisonCache !== cacheEntry) return this.buildForecastComparison();
+      cacheEntry.result = result;
+      cacheEntry.promise = null;
+      return result;
+    })();
+    cacheEntry.promise = calculation.catch(error => {
+      if (this.forecastComparisonCache === cacheEntry) this.forecastComparisonCache = null;
+      throw error;
+    });
+    this.forecastComparisonCache = cacheEntry;
+    return cacheEntry.promise;
   }
 
   getBestForecastModel(modelResult) {
@@ -4001,12 +4104,22 @@ class SchoolHeatApp {
     observer.observe(canvas);
   }
 
-  drawForecastChart() {
+  async drawForecastChart() {
     const canvas = document.getElementById('forecast-chart');
     const tooltip = document.getElementById('forecast-tooltip');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
+    const chartLine = getDesignToken('--chart-line', '#17685e');
+    const predictionColor = getDesignToken('--chart-prediction', '#a64f36');
+    const chartGrid = getDesignToken('--chart-grid', 'rgba(28, 48, 44, 0.14)');
+    const chartLabel = getDesignToken('--chart-label', '#53675f');
+    const statusColors = {
+      safe: getStatusColor('safe'),
+      caution: getStatusColor('caution'),
+      danger: getStatusColor('danger'),
+      extreme: getStatusColor('extreme')
+    };
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
@@ -4021,12 +4134,21 @@ class SchoolHeatApp {
     ctx.clearRect(0, 0, w, h);
 
     const modelLabels = FORECAST_MODEL_LABELS;
-    const modelResult = this.buildForecastComparison();
+    let modelResult;
+    try {
+      modelResult = await this.buildForecastComparison();
+    } catch (error) {
+      console.error('Could not generate the forecast chart:', error);
+      const summary = document.getElementById('forecast-summary');
+      if (summary) summary.textContent = `Forecast calculation failed: ${error.message}`;
+      this.toast(`Forecast calculation failed: ${error.message}`, 'error');
+      return;
+    }
     const badge = document.getElementById('forecast-badge');
     if (!modelResult) {
       const generatedAt = document.getElementById('forecast-generated-at');
       if (generatedAt) generatedAt.textContent = 'Forecast generation time unavailable';
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = chartLabel;
       ctx.font = '12px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -4076,7 +4198,7 @@ class SchoolHeatApp {
     const xForMinute = minute => pad.left + ((minute - anchorMinute + 30) / 60) * chartW;
     const yForValue = value => pad.top + chartH - ((value - minVal) / niceRange) * chartH;
 
-    ctx.strokeStyle = 'rgba(128,128,128,0.16)';
+    ctx.strokeStyle = chartGrid;
     ctx.lineWidth = 1;
     const gridCount = Math.round(niceRange / step);
     for (let i = 0; i <= gridCount; i++) {
@@ -4086,7 +4208,7 @@ class SchoolHeatApp {
       ctx.moveTo(pad.left, y);
       ctx.lineTo(pad.left + chartW, y);
       ctx.stroke();
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = chartLabel;
       ctx.font = '10px JetBrains Mono, monospace';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
@@ -4096,14 +4218,14 @@ class SchoolHeatApp {
     ctx.beginPath();
     ctx.moveTo(pad.left, pad.top + chartH);
     ctx.lineTo(pad.left + chartW, pad.top + chartH);
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.strokeStyle = chartGrid;
     ctx.lineWidth = 1;
     ctx.stroke();
 
     const timeLabels = [-30, -20, -10, 0, 10, 20, 30];
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillStyle = '#6b7280';
+    ctx.fillStyle = chartLabel;
     ctx.font = '9px Inter, sans-serif';
     timeLabels.forEach(offset => {
       const minute = anchorMinute + offset;
@@ -4123,7 +4245,7 @@ class SchoolHeatApp {
       ctx.beginPath();
       ctx.moveTo(histPoints[i - 1].x, histPoints[i - 1].y);
       ctx.lineTo(histPoints[i].x, histPoints[i].y);
-      ctx.strokeStyle = 'rgba(107,114,128,0.65)';
+      ctx.strokeStyle = chartGrid;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -4149,7 +4271,7 @@ class SchoolHeatApp {
     ctx.beginPath();
     ctx.moveTo(currentPoint.x, currentPoint.y);
     ctx.lineTo(forecastPoint.x, forecastPoint.y);
-    ctx.strokeStyle = '#8b5cf6';
+    ctx.strokeStyle = predictionColor;
     ctx.lineWidth = 2.8;
     ctx.setLineDash([6, 4]);
     ctx.stroke();
@@ -4157,7 +4279,7 @@ class SchoolHeatApp {
 
     const allPoints = [...histPoints, currentPoint, forecastPoint];
     allPoints.forEach(point => {
-      const color = point.type === 'fc' ? '#8b5cf6' : STATUS_COLORS[point.status];
+      const color = point.type === 'fc' ? predictionColor : statusColors[point.status];
       ctx.save();
       if (point.type === 'fc') {
         ctx.shadowColor = color;
@@ -4187,7 +4309,7 @@ class SchoolHeatApp {
       summary.innerHTML = `
         <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
           <span>Current: <strong>${modelResult.current.value.toFixed(1)}°C</strong></span>
-          <span>Best prediction: <strong style="color:#8b5cf6">${forecast.value.toFixed(1)}°C</strong></span>
+          <span>Best prediction: <strong style="color:${predictionColor}">${forecast.value.toFixed(1)}°C</strong></span>
         </div>
         <div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);">${bestModel.label} uses the latest ${modelResult.trainingSamples} same-location examples at ${modelResult.location || 'the current location'} to predict 30 minutes ahead.</div>
       `;
@@ -4463,10 +4585,10 @@ class SchoolHeatApp {
     }
     this.renderDashboardLocationSummary();
     this.renderSensorTrust();
-    this.renderDashboardForecast();
+    this.scheduleDashboardForecastRender();
   }
 
-  saveSettings() {
+  saveSettings(showToast = true) {
     this.settings = {
       firebase: document.getElementById('setting-firebase')?.checked ?? true,
       browserNotifications: document.getElementById('setting-browser-notifications')?.checked ?? false,
@@ -4478,12 +4600,15 @@ class SchoolHeatApp {
       demoMode: document.getElementById('setting-demo')?.checked ?? false,
       darkMode: document.getElementById('setting-darkmode')?.checked ?? false,
       colorMode: document.getElementById('setting-color-mode')?.value || 'automatic',
+      accentPalette: this.settings.accentPalette,
+      customAccentColor: this.settings.customAccentColor,
+      customPaletteColors: this.settings.customPaletteColors,
       tempOffset: parseFloat(document.getElementById('cal-temp')?.value) || 0,
       humidityOffset: parseFloat(document.getElementById('cal-humidity')?.value) || 0,
       language: document.getElementById('setting-language')?.value || this.language || 'en'
     };
     localStorage.setItem('sh_settings', JSON.stringify(this.settings));
-    this.toast('Settings saved', 'success');
+    if (showToast) this.toast('Settings saved', 'success');
   }
 
   saveReadings() {
@@ -4535,9 +4660,11 @@ class SchoolHeatApp {
     this.trendChartLoaded = false;
     this.distributionChartLoaded = false;
     this.forecastChartLoaded = false;
-    this.drawTrendChart();
-    this.drawDistributionChart();
-    this.drawForecastChart();
+    if (this.currentTab === 'history') {
+      this.drawTrendChart();
+      this.drawDistributionChart();
+    }
+    if (this.currentTab === 'forecast') this.drawForecastChart();
     if (!silent) {
       this.toast(
         newDemoReadings.length
@@ -4559,9 +4686,11 @@ class SchoolHeatApp {
     this.trendChartLoaded = false;
     this.distributionChartLoaded = false;
     this.forecastChartLoaded = false;
-    this.drawTrendChart();
-    this.drawDistributionChart();
-    this.drawForecastChart();
+    if (this.currentTab === 'history') {
+      this.drawTrendChart();
+      this.drawDistributionChart();
+    }
+    if (this.currentTab === 'forecast') this.drawForecastChart();
     this.toast('All data cleared.', 'info');
   }
 
@@ -4621,7 +4750,8 @@ class SchoolHeatApp {
       this.toast('No data to export', 'warning');
       return;
     }
-    const json = JSON.stringify(this.readings, null, 2);
+    const readings = this.readings.map(({ source, sourceFile, ...reading }) => reading);
+    const json = JSON.stringify(readings, null, 2);
     this.downloadFile(json, 'schoolheat_readings.json', 'application/json');
     this.toast('JSON exported successfully', 'success');
   }
@@ -4674,6 +4804,7 @@ class SchoolHeatApp {
     if (scrollToTop) window.scrollTo({ top: 0, behavior: 'smooth' });
 
     if (tabId === 'history') {
+      this.renderHistory(false);
       setTimeout(() => {
         this.trendChartLoaded = false;
         this.distributionChartLoaded = false;
@@ -4699,7 +4830,7 @@ class SchoolHeatApp {
       }, 100);
     }
     if (tabId === 'dashboard') {
-      this.renderDashboardForecast();
+      this.scheduleDashboardForecastRender();
     }
     if (tabId === 'monitor') {
       this.updateRecentLocations();
@@ -4758,6 +4889,121 @@ class SchoolHeatApp {
     this.applyTheme();
   }
 
+  applyAccentPalette() {
+    const root = document.documentElement;
+    const rootStyle = root.style;
+    const colorModeControl = document.getElementById('setting-color-mode-control');
+    const anyColorPicker = document.getElementById('setting-any-color');
+    const palette = this.settings.accentPalette;
+    const theme = this.settings.darkMode ? 'dark' : 'light';
+    const customColors = this.settings.customPaletteColors[theme];
+    const colors = palette === 'custom'
+      ? customColors
+      : APP_COLOR_PALETTES[palette]?.[theme];
+    const customProperties = [
+      '--surface-canvas',
+      '--surface-card',
+      '--surface-raised',
+      '--ink-primary',
+      '--ink-secondary',
+      '--ink-muted',
+      '--bg-primary',
+      '--bg-card',
+      '--bg-card-hover',
+      '--text-primary',
+      '--text-secondary',
+      '--text-muted',
+      '--brand-coral',
+      '--brand-amber',
+      '--brand-teal',
+      '--accent-blue',
+      '--accent-purple',
+      '--accent-cyan',
+      '--accent-pink',
+      '--button-primary-bg',
+      '--button-primary-text',
+      '--chart-line',
+      '--chart-prediction',
+      '--chart-fill-top',
+      '--chart-fill-bottom',
+      '--chart-glow',
+      '--chart-grid',
+      '--chart-label',
+      '--latest-reading-bg',
+      '--latest-reading-text',
+      '--border',
+      '--border-hover'
+    ];
+
+    customProperties.forEach(property => rootStyle.removeProperty(property));
+    if (anyColorPicker) anyColorPicker.value = this.settings.customAccentColor;
+    document.querySelectorAll('[data-palette-choice]').forEach(button => {
+      const choice = button.dataset.paletteChoice;
+      const selected = choice === palette;
+      const previewColors = APP_COLOR_PALETTES[choice]?.[theme] || CUSTOM_THEME_COLOR_DEFAULTS[theme];
+      button.setAttribute('aria-pressed', String(selected));
+      button.classList.toggle('is-selected', selected);
+      button.querySelectorAll('[data-palette-preview-field]').forEach(swatch => {
+        const color = previewColors[swatch.dataset.palettePreviewField];
+        if (color) swatch.style.setProperty('--swatch-color', color);
+      });
+    });
+    if (colorModeControl) colorModeControl.hidden = palette !== 'schoolheat';
+    document.querySelectorAll('[data-custom-accent-choice]').forEach(button => {
+      const selected = palette === 'custom' && button.dataset.customAccentChoice === this.settings.customAccentColor;
+      button.setAttribute('aria-pressed', String(selected));
+      button.classList.toggle('is-selected', selected);
+    });
+
+    if (colors && !getCustomPaletteValidationError(colors)) {
+      const surfaces = [colors.background, colors.surface];
+      const accent = getAccessibleAccent(colors.accent, surfaces);
+      const secondaryAccent = getAccessibleAccent(colors.secondaryAccent, surfaces);
+      const border = getAccessibleColor(colors.border, surfaces, 3);
+      const tertiaryAccent = getAccessibleAccent(mixHexColors(colors.accent, colors.secondaryAccent, 0.5), surfaces);
+      const accentRgb = hexToRgb(accent);
+      const secondaryRgb = hexToRgb(colors.secondaryText);
+      const buttonText = getReadableTextColor(accent);
+      const hoverSurface = getRelativeLuminance(colors.background) > 0.5
+        ? mixHexColors(colors.surface, colors.background, 0.45)
+        : mixHexColors(colors.surface, colors.text, 0.08);
+
+      rootStyle.setProperty('--surface-canvas', colors.background);
+      rootStyle.setProperty('--surface-card', colors.surface);
+      rootStyle.setProperty('--surface-raised', hoverSurface);
+      rootStyle.setProperty('--ink-primary', colors.text);
+      rootStyle.setProperty('--ink-secondary', colors.secondaryText);
+      rootStyle.setProperty('--ink-muted', colors.secondaryText);
+      rootStyle.setProperty('--bg-primary', colors.background);
+      rootStyle.setProperty('--bg-card', colors.surface);
+      rootStyle.setProperty('--bg-card-hover', hoverSurface);
+      rootStyle.setProperty('--text-primary', colors.text);
+      rootStyle.setProperty('--text-secondary', colors.secondaryText);
+      rootStyle.setProperty('--text-muted', colors.secondaryText);
+      rootStyle.setProperty('--brand-teal', accent);
+      rootStyle.setProperty('--brand-coral', secondaryAccent);
+      rootStyle.setProperty('--brand-amber', tertiaryAccent);
+      rootStyle.setProperty('--accent-blue', accent);
+      rootStyle.setProperty('--accent-purple', secondaryAccent);
+      rootStyle.setProperty('--accent-cyan', accent);
+      rootStyle.setProperty('--accent-pink', tertiaryAccent);
+      rootStyle.setProperty('--button-primary-bg', accent);
+      rootStyle.setProperty('--button-primary-text', buttonText);
+      rootStyle.setProperty('--chart-line', accent);
+      rootStyle.setProperty('--chart-prediction', secondaryAccent);
+      rootStyle.setProperty('--chart-fill-top', `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.2)`);
+      rootStyle.setProperty('--chart-fill-bottom', `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0)`);
+      rootStyle.setProperty('--chart-glow', `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.2)`);
+      rootStyle.setProperty('--chart-grid', `rgba(${secondaryRgb.r}, ${secondaryRgb.g}, ${secondaryRgb.b}, 0.2)`);
+      rootStyle.setProperty('--chart-label', colors.secondaryText);
+      rootStyle.setProperty('--latest-reading-bg', accent);
+      rootStyle.setProperty('--latest-reading-text', buttonText);
+      rootStyle.setProperty('--border', border);
+      rootStyle.setProperty('--border-hover', `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.55)`);
+    }
+
+  }
+
   applyTheme() {
     const themeColor = document.querySelector('meta[name="theme-color"]');
     document.documentElement.setAttribute(
@@ -4767,11 +5013,12 @@ class SchoolHeatApp {
     document.documentElement.setAttribute('data-active-tab', this.currentTab || 'dashboard');
     if (this.settings.darkMode) {
       document.documentElement.setAttribute('data-theme', 'dark');
-      themeColor?.setAttribute('content', '#080d18');
+      themeColor?.setAttribute('content', '#111b1a');
     } else {
       document.documentElement.setAttribute('data-theme', 'light');
-      themeColor?.setAttribute('content', '#f3f6fa');
+      themeColor?.setAttribute('content', '#f4f1e7');
     }
+    this.applyAccentPalette();
   }
 
   showDistributionSummary() {
@@ -4782,8 +5029,15 @@ class SchoolHeatApp {
     this.toast(`Readings: Hayo ${safeCnt} · Hinay ${cautionCnt} · Hinga ${dangerCnt} · Hinto ${extremeCnt}`, dangerCnt + extremeCnt > 0 ? 'error' : 'info');
   }
 
-  showForecastSummary() {
-    const forecast = this.generateForecastData();
+  async showForecastSummary() {
+    let forecast;
+    try {
+      forecast = await this.generateForecastData();
+    } catch (error) {
+      console.error('Could not generate the forecast summary:', error);
+      this.toast(`Forecast calculation failed: ${error.message}`, 'error');
+      return;
+    }
     if (!forecast || forecast.length === 0) {
       this.toast('Not enough same-location history for a 30-minute forecast yet', 'warning');
       return;
@@ -4811,8 +5065,8 @@ class SchoolHeatApp {
     this.sendHeatSmsAlert(null, true);
   }
 
-  generateForecastData() {
-    const modelResult = this.buildForecastComparison();
+  async generateForecastData() {
+    const modelResult = await this.buildForecastComparison();
     if (!modelResult) return [];
     const bestModel = this.getBestForecastModel(modelResult);
     return [{
