@@ -9,17 +9,23 @@ offline startup. Readings and settings are saved in that browser's local
 storage, so each device has its own local copy; offline changes do not
 automatically sync between devices.
 
-## SchoolHeat 2.0 interface
+## SchoolHeat interface
 
-The interface uses the Midnight Thermal Intelligence theme, with a collapsible
+The interface uses the SchoolHeat campus palette: warm chalk neutrals, deep
+canopy green, and restrained sun and terracotta accents. It has a collapsible
 desktop navigation rail and a mobile navigation drawer. The theme can be
-changed in Settings. Choose Automatic Mode Colors for page-specific accents or
-Unified Thermal Theme for one consistent palette; neither option changes
-measurements, heat-index categories, or forecasts. The About tab explains SchoolHeat's purpose, workflow,
-the DepEd 4H heat-index bands, data limits, and heat-safety guardrails. It also
-links to the Sensor Monitor, Campus Map, and Hotlines. This visual update does
-not change heat-index calculations, stored readings, sensor communication, or
-forecast evaluation.
+changed in Settings. Adaptive campus accents and the unified accent mode apply
+to the default SchoolHeat palette. Users can choose one of the SchoolHeat,
+Canopy, or Lagoon palettes, pick from 16 one-tap color swatches, or open the
+optional full-spectrum color picker. The selected color subtly tints backgrounds
+and surfaces; text, borders, and accents are adjusted for contrast in both themes.
+Reset to SchoolHeat restores the default visual system. Heat-risk colors remain
+fixed so their meanings do not change. None of these options changes
+measurements, heat-index categories, or forecasts. The About tab explains
+SchoolHeat's purpose, workflow, the DepEd 4H heat-index bands, data limits, and
+heat-safety guardrails. It also links to the Sensor Monitor, Campus Map, and
+Hotlines. This visual update does not change heat-index calculations, stored
+readings, sensor communication, or forecast evaluation.
 Reading freshness describes the age of saved data; it is not proof that a
 sensor is currently connected. Each navigation item now opens one distinct
 page: device sync is part of Sensor Monitor, analytics stays with Reading
@@ -38,15 +44,9 @@ percentage. The About page's Ask SchoolHeat assistant answers a fixed set of
 questions locally from saved non-demo records and documented app behavior. It
 does not send questions or readings to an AI service.
 
-In **History**, choose a `.csv` or `.xlsx` file to import readings. Include
-timestamp (or date), temperature, and humidity columns; location is optional
-and defaults to the selected monitor location. The SchoolHeat CSV export
-format is also supported. Imported records are saved in this browser's local
-history and are available to the 30-minute forecast. The forecast needs enough
-same-location readings spanning about two hours; files with more than 5,000
-data rows are truncated, and invalid rows are skipped. Use the trash button
-beside any History entry to delete that reading from this browser; the
-forecast updates to use the remaining readings.
+History displays up to 50 readings per page. Search and status filters cover
+all saved readings. Use the trash button beside a History entry to delete that
+reading from this browser; the forecast updates to use the remaining readings.
 
 Forecast validation compares up to 30 non-overlapping, time-ordered holdouts
 and does not select a best model until at least 10 are available. It compares
@@ -61,15 +61,10 @@ holdouts with an actual value of zero, for which percentage error is undefined.
 The comparison also shows the time span of its holdout readings, and the
 forecast panel records when its prediction was generated.
 App-generated demo readings are excluded from both forecast training and
-validation. Imported files are not independently verified, so use readings
-from the ESP32 or another trusted measurement source before drawing conclusions
-about accuracy. SchoolHeat CSV exports preserve the demo marker when
-re-imported. Older saved demo readings without the demo marker cannot be
-identified automatically; clear pre-existing demo history before using its
-validation metrics.
-New readings record whether they came from manual entry, an ESP32/DHT22, an
-imported file, or demo data. Older readings without a source marker are shown as
-**SOURCE NOT RECORDED** rather than being assumed to be manual entries.
+validation. SchoolHeat CSV exports include a demo-data column so generated
+samples remain distinguishable from measured readings. Older saved demo
+readings without the demo marker cannot be identified automatically; clear
+pre-existing demo history before using its validation metrics.
 
 The dashboard uses the DepEd 4H labels: Hayo (<27°C), Hinay (27–32°C), Hinga
 (33–41°C), and Hinto (42°C or higher). The 29 existing campus sites remain
@@ -80,10 +75,8 @@ provided.
 The dashboard marks the latest saved reading **RECENT** for up to 15 minutes,
 then **STALE**; it also flags missing or invalid timestamps. Freshness is based
 on the reading timestamp, not a sensor connection, and a recent label does not
-confirm sensor calibration. The map's recent ESP32 label also describes only
-the saved timestamp and does not indicate a current connection. The response
-guide provides general prompts for each 4H level; follow school policy and
-local advisories.
+confirm sensor calibration. The response guide provides general prompts for
+each 4H level; follow school policy and local advisories.
 
 The campus view remains a two-dimensional map with the existing mapped
 coordinates. A verified 3D campus model, approved student comfort-feedback
@@ -97,6 +90,12 @@ unavailable until enough complete examples are available; it is also hidden
 when the latest eligible source reading is stale. Device health shows the last
 response and saved ESP32/DHT22 history; it does not claim that a device is
 currently connected or calibrated.
+
+The dashboard's mapped-pin coverage figure matches saved location names to the
+29 marker positions in the campus map. Repeated map labels can share one saved
+record. The figure can include demo, stale, and historical readings, so it is
+not a live sensor-coverage measure. A lightweight original campus illustration
+is used as a visual motif only; it is not a site map or a measurement of shade.
 
 Offline mode does not provide internet services: Firebase sync and phone push
 alerts need internet. For sensor readings, install the published GitHub Pages
@@ -226,8 +225,12 @@ Hinga/Hinto heat warnings. SMS is disabled by default. In **Settings**, enter
 up to five Philippine mobile numbers and enable **SMS Alerts (CLOUDSMS)**.
 Numbers are saved in that browser's local settings and sent through the
 Cloudflare Worker only when an SMS alert is requested; only enter numbers
-with their owners' consent. Alerts are generated when a new reading enters
-Hinga/Hinto or changes between those levels. The Worker verifies Firebase
+with their owners' consent. The in-app high-heat banner and notifications are
+limited to new, valid, non-demo readings recorded within the 15-minute
+freshness window. Repeated readings at the same risk level do not resend an
+alert. Old, demo, and incomplete readings remain visible in history but are not
+treated as active heat warnings. A recent saved reading still does not prove
+that a sensor is currently connected. The Worker verifies Firebase
 Anonymous Auth and App Check tokens, keeps the CLOUDSMS API key and secret in
 Cloudflare secrets, and allows one SMS request every five minutes per account,
 including test messages. CLOUDSMS requires a configured Sender ID; its public
