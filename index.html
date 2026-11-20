@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#111b1a">
-  <meta name="description" content="SchoolHeat — clear campus heat conditions and school-day safety guidance">
-  <title>SchoolHeat — Campus Heat Safety</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#080d18">
+  <meta name="description" content="SchoolHeat Ultimate — Real-time heat index monitoring">
+  <title>SchoolHeat Ultimate — TUKLAS 2026</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,8 +39,8 @@
       height:72px;
       border-radius:18px;
       object-fit:contain;
-      animation:none;
-      filter:none;
+      animation:pulse-glow 1.8s ease-in-out infinite;
+      filter:drop-shadow(0 0 20px rgba(66,217,245,.32));
     }
     @keyframes pulse-glow{
       0%,100%{transform:scale(1);filter:drop-shadow(0 0 16px rgba(66,217,245,.28))}
@@ -51,7 +51,10 @@
       font-weight:800;
       margin-top:1rem;
       letter-spacing:.04em;
-      color:#f3f1e8;
+      background:linear-gradient(110deg,#f4f8ff,#42d9f5 58%,#ff873d);
+      background-clip:text;
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
     }
     .loader-sub{
       font-size:.7rem;
@@ -71,7 +74,7 @@
     .loader-bar{
       height:100%;
       width:0%;
-      background:linear-gradient(90deg,#82c4a8,#ebc875,#e58e6b);
+      background:linear-gradient(90deg,#42d9f5,#ff873d,#ff4d5a);
       border-radius:3px;
       animation:load-progress 1.2s cubic-bezier(.4,0,.2,1) forwards;
     }
@@ -82,7 +85,11 @@
       100%{width:100%}
     }
     .loader-orb{
-      display:none;
+      position:absolute;
+      border-radius:50%;
+      filter:blur(80px);
+      opacity:.12;
+      animation:orb-float 8s ease-in-out infinite;
     }
     .loader-orb:nth-child(1){width:280px;height:280px;background:#42d9f5;top:-40px;left:-40px;animation-delay:0s}
     .loader-orb:nth-child(2){width:220px;height:220px;background:#ff873d;bottom:-20px;right:-20px;animation-delay:-4s}
@@ -107,7 +114,7 @@
   <div class="loader-orb"></div>
   <img src="assets/app-logo.png" alt="SchoolHeat" class="loader-logo" id="loader-logo-img">
   <div class="loader-brand">SchoolHeat</div>
-  <div class="loader-sub">Campus Heat &amp; Shade · TUKLAS 2026</div>
+  <div class="loader-sub">Ultimate — TUKLAS 2026</div>
   <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
 </div>
 
@@ -125,12 +132,12 @@
 <div id="app">
 
   <!-- Heat Alert Banner -->
-  <div class="alert-banner" id="alert-banner" role="alert" style="display:none;">
+  <div class="alert-banner" id="alert-banner" style="display:none;">
     <div class="alert-content">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       <span id="alert-text">Hinto heat detected at Basketball Court — 44.2°C</span>
     </div>
-    <button class="alert-close" type="button" aria-label="Dismiss heat alert" onclick="document.getElementById('alert-banner').style.display='none'">
+    <button class="alert-close" onclick="document.getElementById('alert-banner').style.display='none'">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
   </div>
@@ -142,8 +149,8 @@
     <div class="header-brand">
       <img src="assets/app-logo.png" alt="Logo" class="header-logo">
       <div class="header-text">
-        <span class="header-title">SchoolHeat</span>
-        <span class="header-badge">CAMPUS HEAT &amp; SHADE</span>
+        <span class="header-title">SchoolHeat 2.0</span>
+        <span class="header-badge">ENVIRONMENTAL INTELLIGENCE COMMAND CENTER</span>
         <span class="header-project">TUKLAS 2026</span>
       </div>
     </div>
@@ -167,13 +174,9 @@
       <section class="dashboard-hero" aria-labelledby="dashboard-hero-title">
         <img class="dashboard-hero-image" src="assets/school-bg-mobile.jpg" alt="" fetchpriority="high">
         <div class="dashboard-hero-shade" aria-hidden="true"></div>
-        <figure class="dashboard-hero-illustration" aria-labelledby="dashboard-illustration-caption">
-          <img src="assets/campus-heat-atlas.svg" alt="" decoding="async">
-          <figcaption id="dashboard-illustration-caption">Illustration only · not a site map or shade measurement</figcaption>
-        </figure>
         <div class="dashboard-hero-content">
           <div class="dashboard-hero-topline">
-            <span class="dashboard-eyebrow">SCHOOLHEAT FIELD ATLAS · SCHOOL-DAY CONDITIONS</span>
+            <span class="dashboard-eyebrow">SCHOOLHEAT 2.0 · ENVIRONMENTAL INTELLIGENCE</span>
             <span class="dashboard-freshness nodata" id="dashboard-freshness">NO DATA</span>
           </div>
           <h2 id="dashboard-hero-title">Campus conditions, at a glance.</h2>
@@ -231,41 +234,6 @@
           <div class="status-range">42°C and above</div>
         </div>
       </div>
-      <section class="campus-coverage-card" aria-labelledby="campus-coverage-title">
-        <div class="campus-coverage-copy">
-          <span class="dashboard-section-kicker">FIELD ATLAS · COVERAGE</span>
-          <h3 id="campus-coverage-title">Mapped pins with saved readings</h3>
-          <div class="campus-coverage-count" aria-live="polite">
-            <strong><span id="dashboard-coverage-count">0</span><span aria-hidden="true"> / </span><span id="dashboard-coverage-total">29</span></strong>
-            <span>map pins</span>
-          </div>
-          <div
-            class="campus-coverage-meter"
-            id="dashboard-coverage-meter"
-            role="progressbar"
-            aria-label="Map pins with saved readings"
-            aria-valuemin="0"
-            aria-valuemax="29"
-            aria-valuenow="0"
-            aria-valuetext="0 of 29 map pins have saved readings"
-          >
-            <span class="campus-coverage-fill" id="dashboard-coverage-fill"></span>
-          </div>
-          <div class="campus-coverage-detail">
-            <strong id="dashboard-coverage-missing">29 map pins have no saved readings</strong>
-            <p>Counts match saved location names to map pins. Repeated names may share one record; demo and older readings are included. This is not live coverage.</p>
-          </div>
-        </div>
-        <div class="campus-coverage-mark" aria-hidden="true">
-          <span>29</span>
-          <svg viewBox="0 0 64 64" fill="none">
-            <path d="M7 50h50M12 50V25l13-10 13 10v25m-19 0V33h12v17M39 50V31l8-7 9 7v19M44 37h7M44 42h7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M7 20h8M11 16v8M48 13h8M52 9v8" stroke="var(--brand-amber)" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="11" cy="20" r="5" fill="var(--brand-amber)" fill-opacity=".2"/>
-            <path d="M4 57c10-4 17-4 27 0s19 4 29 0" stroke="currentColor" stroke-opacity=".42" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-      </section>
       <p class="dashboard-data-caveat">Counts use the latest saved reading at each location, including clearly marked demo data; they do not represent simultaneous coverage of every campus building.</p>
 
       <section class="glass-card heat-guidance-card nodata" id="heat-guidance-card" aria-live="polite">
@@ -289,12 +257,12 @@
           </div>
           <span class="reading-time" id="latest-time">—</span>
         </div>
-        <div class="demo-reading-label" id="latest-demo-label" hidden>DEMO DATA</div>
+        <div class="reading-source" id="latest-source">No source information</div>
         <div class="reading-freshness nodata" id="reading-freshness">No readings available</div>
         <div class="reading-main">
           <div class="dashboard-gauge-block">
             <div class="reading-gauge-wrap">
-              <canvas id="gauge-canvas" width="240" height="240" role="img" aria-label="Heat Index gauge. The current value and classification appear beside it."></canvas>
+              <canvas id="gauge-canvas" width="240" height="220" role="img" aria-label="Heat Index gauge. The current value and classification appear beside it."></canvas>
               <div class="gauge-value" id="gauge-value">—</div>
               <div class="gauge-unit">°C</div>
             </div>
@@ -346,7 +314,7 @@
               <span class="dashboard-section-kicker">CAMPUS INTELLIGENCE</span>
               <h3>2D Campus Map</h3>
             </div>
-            <span class="dashboard-preview-tag" id="dashboard-map-site-count">29 map pins</span>
+            <span class="dashboard-preview-tag">29 mapped sites</span>
           </div>
           <button class="campus-preview-image-button" type="button" onclick="app.switchTab('map')" aria-label="Open the interactive campus map">
             <img src="assets/campus-map.png" alt="SchoolHeat's 2D campus site map with numbered buildings." loading="lazy" decoding="async">
@@ -365,16 +333,8 @@
             <span class="dashboard-preview-tag">Forecast</span>
           </div>
           <div class="dashboard-forecast-empty" id="dashboard-forecast-empty">
-            <span class="dashboard-forecast-empty-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="9"></circle>
-                <path d="M12 7v5l3 2"></path>
-              </svg>
-            </span>
-            <div class="dashboard-forecast-empty-copy">
-              <strong id="dashboard-forecast-empty-title">Forecast unavailable</strong>
-              <span id="dashboard-forecast-empty-detail">At least 12 complete same-location examples from non-demo readings are needed. No prediction is shown until the data supports one.</span>
-            </div>
+            <strong id="dashboard-forecast-empty-title">Forecast unavailable</strong>
+            <span id="dashboard-forecast-empty-detail">At least 12 complete same-location examples from non-demo readings are needed. No prediction is shown until the data supports one.</span>
           </div>
           <div class="dashboard-forecast-content" id="dashboard-forecast-content" hidden>
             <div class="dashboard-forecast-summary">
@@ -394,7 +354,7 @@
               <span><i class="predicted-line"></i>30-minute forecast</span>
             </div>
           </div>
-          <button class="btn-text dashboard-preview-action" id="dashboard-forecast-action" type="button" onclick="app.switchTab('forecast')"><span id="dashboard-forecast-action-label">View forecast details</span> <span aria-hidden="true">→</span></button>
+          <button class="btn-text dashboard-preview-action" type="button" onclick="app.switchTab('forecast')">View forecast details <span aria-hidden="true">→</span></button>
         </article>
 
         <article class="glass-card dashboard-preview-card dashboard-trust-card">
@@ -616,6 +576,16 @@
       <div class="panel-header">
         <h2 class="panel-title">Reading History</h2>
         <p class="panel-subtitle">All recorded heat index data with trends</p>
+      </div>
+
+      <div class="glass-card history-upload">
+        <div>
+          <h3>Import readings</h3>
+          <p>Upload a CSV or Excel (.xlsx) file. Include timestamp, temperature, and humidity columns; location is optional.</p>
+        </div>
+        <input type="file" id="history-file-input" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+        <button class="btn-secondary" id="history-upload-button" type="button">Choose data file</button>
+        <p class="history-upload-hint">Readings are saved on this device and included in Forecast. CSV also supports the SchoolHeat export format.</p>
       </div>
 
       <div class="glass-card filter-bar">
@@ -921,10 +891,10 @@
             <button class="btn-secondary" type="button" onclick="app.switchTab('hotlines')">View Hotlines</button>
           </div>
         </div>
-        <div class="about-hero-stat" aria-label="29 map pins">
+        <div class="about-hero-stat" aria-label="29 mapped campus sites">
           <span class="about-stat-kicker">CAMPUS VIEW</span>
-          <strong id="about-map-pin-count">29</strong>
-          <span class="about-stat-label">map pins</span>
+          <strong>29</strong>
+          <span class="about-stat-label">mapped campus sites</span>
           <span class="about-stat-rule" aria-hidden="true"></span>
           <span class="about-stat-foot">DepEd 4H heat-index levels</span>
         </div>
@@ -988,7 +958,7 @@
           <article class="about-workflow-card glass-card">
             <span class="about-workflow-number">02</span>
             <h4>See the campus picture</h4>
-            <p>Use the dashboard, map, and history to review recorded heat-index levels across map pins.</p>
+            <p>Use the dashboard, map, and history to review recorded heat-index levels across mapped sites.</p>
           </article>
           <article class="about-workflow-card glass-card">
             <span class="about-workflow-number">03</span>
@@ -1110,113 +1080,12 @@
       <div class="settings-group">
         <div class="glass-card">
           <h4 class="settings-section-title">Color System</h4>
-          <p class="setting-hint">Choose a preset or tap one color to build a matching palette. Heat-risk colors keep their meanings.</p>
-          <details id="setting-color-mode-control" class="color-mode-advanced">
-            <summary>Advanced accent options</summary>
-            <label for="setting-color-mode">SchoolHeat accent mode</label>
-            <select id="setting-color-mode" class="input-field" style="margin-top: 8px;">
-              <option value="automatic">Adaptive campus accents</option>
-              <option value="unified">Unified SchoolHeat palette</option>
-            </select>
-          </details>
-          <div class="accent-palette-label" id="setting-palette-label">App color palette</div>
-          <div class="palette-choice-grid" role="group" aria-labelledby="setting-palette-label">
-            <button class="palette-choice" type="button" data-palette-choice="schoolheat" aria-pressed="false">
-              <span class="palette-choice-swatches" aria-hidden="true">
-                <i data-palette-preview-field="background" style="--swatch-color: #111b1a;"></i><i data-palette-preview-field="surface" style="--swatch-color: #192624;"></i><i data-palette-preview-field="accent" style="--swatch-color: #82c4a8;"></i><i data-palette-preview-field="secondaryAccent" style="--swatch-color: #e58e6b;"></i>
-              </span>
-              <span>SchoolHeat</span>
-            </button>
-            <button class="palette-choice" type="button" data-palette-choice="canopy" aria-pressed="false">
-              <span class="palette-choice-swatches" aria-hidden="true">
-                <i data-palette-preview-field="background" style="--swatch-color: #111b15;"></i><i data-palette-preview-field="surface" style="--swatch-color: #1d2b21;"></i><i data-palette-preview-field="accent" style="--swatch-color: #78b879;"></i><i data-palette-preview-field="secondaryAccent" style="--swatch-color: #d59a68;"></i>
-              </span>
-              <span>Canopy</span>
-            </button>
-            <button class="palette-choice" type="button" data-palette-choice="lagoon" aria-pressed="false">
-              <span class="palette-choice-swatches" aria-hidden="true">
-                <i data-palette-preview-field="background" style="--swatch-color: #101b20;"></i><i data-palette-preview-field="surface" style="--swatch-color: #19282d;"></i><i data-palette-preview-field="accent" style="--swatch-color: #6abbb3;"></i><i data-palette-preview-field="secondaryAccent" style="--swatch-color: #e39a7b;"></i>
-              </span>
-              <span>Lagoon</span>
-            </button>
-          </div>
-          <div class="custom-color-picker">
-            <div class="accent-palette-label" id="setting-color-choice-label">Choose a color</div>
-            <p class="setting-hint">Tap one color to apply a balanced palette across the app.</p>
-            <div class="color-choice-grid" role="group" aria-labelledby="setting-color-choice-label">
-              <button class="color-choice" type="button" data-custom-accent-choice="#4f8d5a" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #4f8d5a;" aria-hidden="true"></span>
-                <span>Green</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#b94444" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #b94444;" aria-hidden="true"></span>
-                <span>Red</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#287985" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #287985;" aria-hidden="true"></span>
-                <span>Teal</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#26999e" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #26999e;" aria-hidden="true"></span>
-                <span>Cyan</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#3777a8" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #3777a8;" aria-hidden="true"></span>
-                <span>Blue</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#3a5f8e" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #3a5f8e;" aria-hidden="true"></span>
-                <span>Navy</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#82c4a8" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #82c4a8;" aria-hidden="true"></span>
-                <span>Mint</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#7252a3" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #7252a3;" aria-hidden="true"></span>
-                <span>Purple</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#535fa8" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #535fa8;" aria-hidden="true"></span>
-                <span>Indigo</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#ac4a72" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #ac4a72;" aria-hidden="true"></span>
-                <span>Rose</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#ca6389" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #ca6389;" aria-hidden="true"></span>
-                <span>Pink</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#cf7155" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #cf7155;" aria-hidden="true"></span>
-                <span>Coral</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#ba6048" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #ba6048;" aria-hidden="true"></span>
-                <span>Terracotta</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#bd6c23" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #bd6c23;" aria-hidden="true"></span>
-                <span>Orange</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#bd8218" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #bd8218;" aria-hidden="true"></span>
-                <span>Gold</span>
-              </button>
-              <button class="color-choice" type="button" data-custom-accent-choice="#b49b24" aria-pressed="false">
-                <span class="color-choice-swatch" style="--choice-color: #b49b24;" aria-hidden="true"></span>
-                <span>Yellow</span>
-              </button>
-            </div>
-            <details class="any-color-picker">
-              <summary>Choose any other color</summary>
-              <label for="setting-any-color">Full color picker</label>
-              <input id="setting-any-color" type="color" value="#287985">
-            </details>
-            <button class="btn-text custom-palette-reset" id="setting-reset-palette" type="button">Reset to SchoolHeat</button>
-          </div>
-          <p class="setting-hint accent-color-hint">Risk colors stay fixed and labeled.</p>
+          <p class="setting-hint">Automatic Mode Colors gives each page its own accent. Unified Thermal Theme uses thermal orange and electric cyan across the app. Neither mode changes measurements or forecasts.</p>
+          <label for="setting-color-mode">Accent color mode</label>
+          <select id="setting-color-mode" class="input-field" style="margin-top: 8px;">
+            <option value="automatic">Automatic Mode Colors</option>
+            <option value="unified">Unified Thermal Theme</option>
+          </select>
         </div>
       </div>
 
@@ -1277,8 +1146,8 @@
         </div>
         <div class="glass-card setting-item">
           <div class="setting-info">
-            <h4>SchoolHeat Canopy Theme</h4>
-            <p>Switch between the warm chalk and deep canopy palettes</p>
+            <h4>Midnight Thermal Theme</h4>
+            <p>Use the SchoolHeat environmental intelligence dark interface</p>
           </div>
           <label class="toggle">
             <input type="checkbox" id="setting-darkmode" checked>
@@ -1321,6 +1190,11 @@
       </div>
 
       <div class="settings-group" id="alerts-center">
+        <div class="glass-card alert-history-card">
+          <h4 class="settings-section-title">Heat Alert Activity</h4>
+          <p class="setting-hint">This list shows recorded Hinga/Hinto readings, not confirmed notifications. SchoolHeat does not keep per-reading delivery receipts in this browser.</p>
+          <div class="alert-history-list" id="alert-history-list"></div>
+        </div>
         <div class="glass-card">
           <h4 class="settings-section-title">Alert Notifications</h4>
           <label for="setting-sms-numbers">SMS recipient numbers (Philippine mobile numbers; up to 5)</label>
@@ -1375,7 +1249,7 @@
   <nav class="bottom-nav" id="bottom-nav" aria-label="Primary navigation">
     <div class="sidebar-brand">
       <img src="assets/app-logo.png" alt="" class="sidebar-brand-logo" aria-hidden="true">
-      <div><span class="sidebar-brand-kicker">CAMPUS CONDITIONS</span><strong>SchoolHeat</strong></div>
+      <div><span class="sidebar-brand-kicker">THERMAL INTELLIGENCE</span><strong>SchoolHeat</strong></div>
     </div>
     <button class="sidebar-collapse-toggle" id="sidebar-collapse-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Collapse sidebar</span>
@@ -1423,7 +1297,7 @@
   <footer class="app-footer">
     <div class="footer-text">
       <span class="footer-school">Your School</span>
-      <span class="footer-project">Campus Heat &amp; Shade · TUKLAS 2026</span>
+      <span class="footer-project">SchoolHeat Ultimate — TUKLAS 2026</span>
     </div>
   </footer>
 
